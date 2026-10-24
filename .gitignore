@@ -1,0 +1,19 @@
+# Local secrets (never commit real keys)
+.env
+.env.*
+!.env.example
+config.local.json
+
+# Build output
+target/
+out/
+
+# Local data (H2 database files)
+data/
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+*.log
