@@ -1,5 +1,7 @@
 package com.fleetops.app;
 
+import com.fleetops.ai.LlmClient;
+import com.fleetops.ai.LlmClients;
 import com.fleetops.config.AppConfig;
 import java.util.Objects;
 
@@ -15,6 +17,7 @@ import java.util.Objects;
 public final class AppContext {
 
     private final AppConfig config;
+    private LlmClient llm;
 
     private AppContext(AppConfig config) {
         this.config = config;
@@ -31,5 +34,16 @@ public final class AppContext {
 
     public AppConfig config() {
         return config;
+    }
+
+    /**
+     * The AI client chosen by {@code LLM_PROVIDER}, built on first use and then shared. A missing
+     * Gemini key is already reported when the configuration is loaded.
+     */
+    public synchronized LlmClient llm() {
+        if (llm == null) {
+            llm = LlmClients.create(config);
+        }
+        return llm;
     }
 }
