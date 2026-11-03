@@ -5,6 +5,7 @@ import com.fleetops.ai.JdkHttpPoster;
 import com.fleetops.ai.LlmClients;
 import com.fleetops.config.AppConfig;
 import com.fleetops.intel.MockIntelligence;
+import com.fleetops.plan.MockPlanning;
 import java.util.Objects;
 
 /**
@@ -44,7 +45,10 @@ public final class AppContext {
      */
     public synchronized LlmClient llm() {
         if (llm == null) {
-            llm = LlmClients.create(config, new JdkHttpPoster(), new MockIntelligence());
+            MockIntelligence verification = new MockIntelligence();
+            MockPlanning planning = new MockPlanning();
+            llm = LlmClients.create(config, new JdkHttpPoster(),
+                    request -> MockPlanning.handles(request) ? planning.apply(request) : verification.apply(request));
         }
         return llm;
     }
