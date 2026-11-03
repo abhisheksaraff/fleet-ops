@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * Picks what to look at next: for each topic, the newest item whose article has not been stored as
@@ -35,10 +36,20 @@ public final class NewsCollector {
 
     private final NewsSource source;
     private final IncidentRepository repository;
+    private final Predicate<NewsItem> alsoSkip;
 
     public NewsCollector(NewsSource source, IncidentRepository repository) {
+        this(source, repository, item -> false);
+    }
+
+    /**
+     * @param alsoSkip items to leave out besides the ones already stored, for example articles that
+     *     were examined and turned down
+     */
+    public NewsCollector(NewsSource source, IncidentRepository repository, Predicate<NewsItem> alsoSkip) {
         this.source = Objects.requireNonNull(source, "source");
         this.repository = Objects.requireNonNull(repository, "repository");
+        this.alsoSkip = Objects.requireNonNull(alsoSkip, "alsoSkip");
     }
 
     public CollectedNews collectOnePerTopic(Collection<IncidentType> topics) {
@@ -49,6 +60,7 @@ public final class NewsCollector {
             try {
                 Optional<NewsItem> next = source.fetch(topic, CANDIDATES_PER_TOPIC).stream()
                         .filter(item -> !repository.existsBySourceUrl(item.url()))
+                        .filter(item -> !alsoSkip.test(item))
                         .filter(item -> !alreadyChosen.contains(item.key()))
                         .findFirst();
                 next.ifPresent(item -> {

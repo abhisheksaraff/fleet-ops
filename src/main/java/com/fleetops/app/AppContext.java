@@ -1,8 +1,10 @@
 package com.fleetops.app;
 
 import com.fleetops.ai.LlmClient;
+import com.fleetops.ai.JdkHttpPoster;
 import com.fleetops.ai.LlmClients;
 import com.fleetops.config.AppConfig;
+import com.fleetops.intel.MockIntelligence;
 import java.util.Objects;
 
 /**
@@ -42,7 +44,7 @@ public final class AppContext {
      */
     public synchronized LlmClient llm() {
         if (llm == null) {
-            llm = LlmClients.create(config);
+            llm = LlmClients.create(config, new JdkHttpPoster(), new MockIntelligence());
         }
         return llm;
     }
