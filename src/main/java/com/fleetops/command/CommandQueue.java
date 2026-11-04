@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Predicate;
 
 /**
  * Runs mission commands. Each unit has its own lane: commands for one unit run one after another,
@@ -89,6 +90,30 @@ public final class CommandQueue implements TickTask {
         }
         lanes.values().removeIf(Deque::isEmpty);
         engine.hold(engine.world().fleet());
+    }
+
+    /**
+     * Cancels every unfinished command that matches the condition, wherever it is in its lane, and
+     * reports each one to the listeners. Other commands (and other units' lanes) are left alone, which
+     * is what lets one mission be stopped while another carries on.
+     *
+     * @return how many commands were cancelled
+     */
+    public int cancelWhere(Predicate<MissionCommand> condition, String reason, long tick) {
+        Objects.requireNonNull(condition, "condition");
+        int cancelled = 0;
+        for (Deque<MissionCommand> lane : new ArrayList<>(lanes.values())) {
+            for (MissionCommand command : new ArrayList<>(lane)) {
+                if (condition.test(command)) {
+                    lane.remove(command);
+                    command.cancel(reason);
+                    finish(command, tick);
+                    cancelled++;
+                }
+            }
+        }
+        lanes.values().removeIf(Deque::isEmpty);
+        return cancelled;
     }
 
     /** Number of commands that have not finished yet. */
