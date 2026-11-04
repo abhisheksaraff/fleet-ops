@@ -45,6 +45,16 @@ public final class InMemoryIncidentRepository implements IncidentRepository {
     }
 
     @Override
+    public synchronized boolean deleteById(long id) {
+        Incident removed = byId.remove(id);
+        if (removed == null) {
+            return false;
+        }
+        sourceKey(removed).ifPresent(idBySourceKey::remove);
+        return true;
+    }
+
+    @Override
     public synchronized Optional<Incident> findById(long id) {
         return Optional.ofNullable(byId.get(id));
     }

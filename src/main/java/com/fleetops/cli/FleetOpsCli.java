@@ -46,6 +46,7 @@ public final class FleetOpsCli implements Runnable {
         cli.addSubcommand(new IncidentsCommand(contextSupplier));
         cli.addSubcommand(new ShowCommand(contextSupplier));
         cli.addSubcommand(new RunCommand(contextSupplier, reader));
+        cli.addSubcommand(new ResetCommand(contextSupplier, reader));
         return cli;
     }
 

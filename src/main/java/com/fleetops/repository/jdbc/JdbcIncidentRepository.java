@@ -152,6 +152,18 @@ public final class JdbcIncidentRepository implements IncidentRepository, AutoClo
     }
 
     @Override
+    public synchronized boolean deleteById(long id) {
+        try (PreparedStatement delete = connection().prepareStatement("DELETE FROM incident WHERE id = ?")) {
+            delete.setLong(1, id);
+            boolean existed = delete.executeUpdate() > 0;
+            loaded.remove(id);
+            return existed;
+        } catch (SQLException e) {
+            throw failure("delete incident #" + id, e);
+        }
+    }
+
+    @Override
     public synchronized Optional<Incident> findById(long id) {
         Incident known = loaded.get(id);
         if (known != null) {

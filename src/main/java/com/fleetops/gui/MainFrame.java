@@ -71,6 +71,7 @@ final class MainFrame extends JFrame {
     private final JLabel status = new JLabel(" ");
 
     private final JButton scanButton = new JButton("Scan news");
+    private final JButton clearButton = new JButton("Clear finished");
     private final JButton runButton = new JButton("Plan mission...");
     private final JButton abortButton = new JButton("Abort selected");
     private final JButton abortAllButton = new JButton("Abort all");
@@ -145,6 +146,7 @@ final class MainFrame extends JFrame {
 
         JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
         top.add(scanButton);
+        top.add(clearButton);
         top.add(new JLabel("Click an incident square on the map or in the list. Double-click a square to plan."));
 
         JPanel missionRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
@@ -217,6 +219,7 @@ final class MainFrame extends JFrame {
             updateButtons();
         });
         scanButton.addActionListener(e -> scan());
+        clearButton.addActionListener(e -> clearFinished());
         runButton.addActionListener(e -> planSelected());
         abortButton.addActionListener(e -> abortSelected());
         abortAllButton.addActionListener(e -> {
@@ -287,6 +290,7 @@ final class MainFrame extends JFrame {
         Incident selected = selectedIncident();
         boolean active = rig != null && !rig.control().activeMissions().isEmpty();
         scanButton.setEnabled(!busy);
+        clearButton.setEnabled(!busy && !active && model.incidents().stream().anyMatch(i -> !i.isActive()));
         runButton.setEnabled(!busy && selected != null && selected.state() == IncidentState.VERIFIED);
         abortButton.setEnabled(!busy && selected != null && rig != null && rig.control().missionFor(selected).filter(m -> !m.isFinished()).isPresent());
         abortAllButton.setEnabled(!busy && active);
@@ -435,6 +439,28 @@ final class MainFrame extends JFrame {
             rig.control().abort(m, "stopped by the operator");
             appendLog("Aborting: " + selected.title());
         });
+    }
+
+    private void clearFinished() {
+        if (busy || (rig != null && !rig.control().activeMissions().isEmpty())) {
+            return;
+        }
+        long count = model.incidents().stream().filter(i -> !i.isActive()).count();
+        int choice = JOptionPane.showConfirmDialog(this, "Delete " + count + " finished incident(s) from the database?",
+                "Clear finished incidents", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+        if (choice != JOptionPane.OK_OPTION) {
+            return;
+        }
+        try {
+            int removed = app.repository().deleteFinished();
+            appendLog("Deleted " + removed + " finished incident(s).");
+            // The map keeps survivors of removed incidents until the fleet is rebuilt.
+            rig = null;
+            engineForMap = null;
+        } catch (RuntimeException e) {
+            showError("Could not delete incidents", e);
+        }
+        refreshIncidents();
     }
 
     private void resetFleet() {

@@ -114,7 +114,7 @@ final class RunCommand extends AbstractAppCommand {
             out.println("Dry run: plan cancelled, nothing was simulated.");
             return ExitCodes.OK;
         }
-        if (!yes && !approved(out)) {
+        if (!yes && !CliFormat.confirm(input, out, "Launch this mission?")) {
             control.cancelPlan(plan);
             out.println("Plan not approved; the incident stays VERIFIED.");
             return ExitCodes.OK;
@@ -160,12 +160,5 @@ final class RunCommand extends AbstractAppCommand {
                 control.runUntilSettled(maxTicks);
             }
         }
-    }
-
-    private boolean approved(PrintWriter out) throws IOException {
-        out.print("Launch this mission? [y/N] ");
-        out.flush();
-        String line = input.readLine();
-        return line != null && (line.strip().equalsIgnoreCase("y") || line.strip().equalsIgnoreCase("yes"));
     }
 }

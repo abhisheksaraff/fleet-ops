@@ -41,6 +41,34 @@ public interface IncidentRepository {
 
     List<Incident> findByState(IncidentState state);
 
+    /**
+     * Removes one incident. The same article can be stored again afterwards.
+     *
+     * @return true if an incident with this id existed
+     */
+    boolean deleteById(long id);
+
+    /** Removes every finished incident (completed, rejected or duplicate). @return how many were removed */
+    default int deleteFinished() {
+        return deleteWhere(incident -> !incident.isActive());
+    }
+
+    /** Removes every incident, whatever its state. @return how many were removed */
+    default int deleteAll() {
+        return deleteWhere(incident -> true);
+    }
+
+    /** Removes the incidents that match. @return how many were removed */
+    default int deleteWhere(java.util.function.Predicate<Incident> filter) {
+        int removed = 0;
+        for (Incident incident : findAll()) {
+            if (filter.test(incident) && incident.id().isPresent() && deleteById(incident.id().get())) {
+                removed++;
+            }
+        }
+        return removed;
+    }
+
     default boolean existsBySourceUrl(String sourceUrl) {
         return findBySourceUrl(sourceUrl).isPresent();
     }
