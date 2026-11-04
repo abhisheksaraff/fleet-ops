@@ -1,6 +1,10 @@
 package com.fleetops.cli;
 
 import com.fleetops.app.AppContext;
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.function.Supplier;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -28,10 +32,20 @@ public final class FleetOpsCli implements Runnable {
         spec.commandLine().usage(spec.commandLine().getOut());
     }
 
-    /** Builds the full command tree. */
+    /** Builds the full command tree, reading approvals from the real standard input. */
     public static CommandLine commandLine(Supplier<AppContext> contextSupplier) {
+        return commandLine(contextSupplier, System.in);
+    }
+
+    /** @param in where {@code run} reads the operator's answer to "Launch this mission?" */
+    public static CommandLine commandLine(Supplier<AppContext> contextSupplier, InputStream in) {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
         CommandLine cli = new CommandLine(new FleetOpsCli());
         cli.addSubcommand(new ConfigCommand(contextSupplier));
+        cli.addSubcommand(new ScanCommand(contextSupplier));
+        cli.addSubcommand(new IncidentsCommand(contextSupplier));
+        cli.addSubcommand(new ShowCommand(contextSupplier));
+        cli.addSubcommand(new RunCommand(contextSupplier, reader));
         return cli;
     }
 

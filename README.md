@@ -44,6 +44,29 @@ mvn -q exec:java                           # start the GUI
 mvn -q exec:java -Dexec.mainClass=com.fleetops.cli.FleetOpsCli -Dexec.args="config"   # CLI
 ```
 
+### Command line
+
+Every command is run as `mvn -q exec:java -Dexec.mainClass=com.fleetops.cli.FleetOpsCli -Dexec.args="<command>"`.
+
+| Command | What it does |
+|---|---|
+| `config` | Show the effective configuration (keys are never printed) |
+| `scan [-t flood,fire] [-v]` | Read one new news item per topic, have the AI verify it, store new incidents |
+| `incidents [-a] [-s STATE] [-t TYPE]` | List incidents (active ones unless `-a` or `-s`) |
+| `show <id>` | Details of one incident |
+| `run <id> [--dry-run] [-y] [--progress] [--abort-after S]` | AI plans the response, you approve it, the simulation plays out and prints a report |
+
+`run` also takes `--rovers`, `--drones`, `--helicopters`, `--depot-km`, `--seed` and `--max-ticks`.
+Exit codes: 0 ok, 1 configuration error, 2 bad usage, 3 incident not found, 4 failed or not completed.
+
+Example session with the offline demo news:
+
+```
+scan
+incidents
+run 1 --progress
+```
+
 In IntelliJ you can also run `FleetOpsGui` or `FleetOpsCli` directly from their `main` methods.
 
 ## Design
