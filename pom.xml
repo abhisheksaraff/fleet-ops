@@ -17,6 +17,7 @@
     <junit.version>5.11.4</junit.version>
     <picocli.version>4.7.6</picocli.version>
     <h2.version>2.3.232</h2.version>
+    <jxmapviewer.version>2.8</jxmapviewer.version>
     <!-- Default entry point for `mvn exec:java`; override with -Dexec.mainClass=... -->
     <exec.mainClass>com.fleetops.gui.FleetOpsGui</exec.mainClass>
   </properties>
@@ -26,6 +27,13 @@
       <groupId>info.picocli</groupId>
       <artifactId>picocli</artifactId>
       <version>${picocli.version}</version>
+    </dependency>
+
+    <!-- Map component (OpenStreetMap tiles) for the Swing GUI. -->
+    <dependency>
+      <groupId>org.jxmapviewer</groupId>
+      <artifactId>jxmapviewer2</artifactId>
+      <version>${jxmapviewer.version}</version>
     </dependency>
 
     <!-- Embedded database. Runtime scope on purpose: the code only uses java.sql, so another
