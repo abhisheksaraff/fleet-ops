@@ -1,9 +1,13 @@
 package com.fleetops.config;
 
+import com.fleetops.domain.incident.IncidentType;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -26,10 +30,22 @@ public final class AppConfig {
     public static final String KEY_LLM_BASE_URL = "LLM_BASE_URL";
     public static final String KEY_DB_URL = "DB_URL";
     public static final String KEY_MAP_TILES = "MAP_TILES";
+    public static final String KEY_DB_USER = "DB_USER";
+    public static final String KEY_DB_PASSWORD = "DB_PASSWORD";
+    public static final String KEY_NEWS_SOURCES = "NEWS_SOURCES";
+    public static final String KEY_TELEGRAM_CHANNELS = "TELEGRAM_CHANNELS";
+    public static final String KEY_NEWS_GOOGLE_EDITION = "NEWS_GOOGLE_EDITION";
+    public static final String KEY_NEWS_TOPICS = "NEWS_TOPICS";
 
     public static final String DEFAULT_LLM_BASE_URL = "http://localhost:11434";
     public static final String DEFAULT_DB_URL = "jdbc:h2:./data/fleetops";
     public static final String DEFAULT_MAP_TILES = "osm";
+    /** The built-in H2 user; embedded H2 creates the database for whoever connects first. */
+    public static final String DEFAULT_DB_USER = "sa";
+    /** A {@code DB_URL} of {@code memory} keeps incidents in memory only (nothing is saved). */
+    public static final String MEMORY_DB_URL = "memory";
+    /** Canadian English edition of Google News. */
+    public static final String DEFAULT_NEWS_GOOGLE_EDITION = "hl=en-CA&gl=CA&ceid=CA:en";
 
     /** The value shipped in {@code .env.example}; it is treated as "no key". */
     public static final String PLACEHOLDER_API_KEY = "YOUR_LOCAL_API_KEY_HERE";
@@ -40,6 +56,12 @@ public final class AppConfig {
     private final String llmBaseUrl;
     private final String dbUrl;
     private final String mapTiles;
+    private final String dbUser;
+    private final String dbPassword; // may be empty, never printed
+    private final List<NewsSourceType> newsSources;
+    private final List<String> telegramChannels;
+    private final String newsGoogleEdition;
+    private final List<IncidentType> newsTopics;
 
     private AppConfig(
             LlmProviderType llmProvider,
@@ -47,13 +69,25 @@ public final class AppConfig {
             String llmModel,
             String llmBaseUrl,
             String dbUrl,
-            String mapTiles) {
+            String mapTiles,
+            String dbUser,
+            String dbPassword,
+            List<NewsSourceType> newsSources,
+            List<String> telegramChannels,
+            String newsGoogleEdition,
+            List<IncidentType> newsTopics) {
         this.llmProvider = llmProvider;
         this.llmApiKey = llmApiKey;
         this.llmModel = llmModel;
         this.llmBaseUrl = llmBaseUrl;
         this.dbUrl = dbUrl;
         this.mapTiles = mapTiles;
+        this.dbUser = dbUser;
+        this.dbPassword = dbPassword;
+        this.newsSources = newsSources;
+        this.telegramChannels = telegramChannels;
+        this.newsGoogleEdition = newsGoogleEdition;
+        this.newsTopics = newsTopics;
     }
 
     /** Loads {@code ./.env} (if present) combined with the real process environment. */
@@ -84,13 +118,26 @@ public final class AppConfig {
                     + "and put your key there (the real .env file is gitignored).");
         }
 
+        List<NewsSourceType> sources = parseSources(pick(KEY_NEWS_SOURCES, environment, fileValues));
+        List<String> channels = splitList(pick(KEY_TELEGRAM_CHANNELS, environment, fileValues));
+        if (sources.contains(NewsSourceType.TELEGRAM) && channels.isEmpty()) {
+            throw new ConfigException("NEWS_SOURCES includes telegram, so TELEGRAM_CHANNELS must list at least one "
+                    + "public channel name (for example: bcnews,emergency_alerts).");
+        }
+
         return new AppConfig(
                 provider,
                 apiKey,
                 pick(KEY_LLM_MODEL, environment, fileValues),
                 orDefault(pick(KEY_LLM_BASE_URL, environment, fileValues), DEFAULT_LLM_BASE_URL),
                 orDefault(pick(KEY_DB_URL, environment, fileValues), DEFAULT_DB_URL),
-                orDefault(pick(KEY_MAP_TILES, environment, fileValues), DEFAULT_MAP_TILES));
+                orDefault(pick(KEY_MAP_TILES, environment, fileValues), DEFAULT_MAP_TILES),
+                orDefault(pick(KEY_DB_USER, environment, fileValues), DEFAULT_DB_USER),
+                orDefault(pick(KEY_DB_PASSWORD, environment, fileValues), ""),
+                sources,
+                channels,
+                orDefault(pick(KEY_NEWS_GOOGLE_EDITION, environment, fileValues), DEFAULT_NEWS_GOOGLE_EDITION),
+                parseTopics(pick(KEY_NEWS_TOPICS, environment, fileValues)));
     }
 
     public LlmProviderType llmProvider() {
@@ -117,6 +164,35 @@ public final class AppConfig {
         return mapTiles;
     }
 
+    public String dbUser() {
+        return dbUser;
+    }
+
+    /** The database password; empty when none is set. Keep it out of logs and screens. */
+    public String dbPassword() {
+        return dbPassword;
+    }
+
+    /** The news sources to read, in the order given (never empty). */
+    public List<NewsSourceType> newsSources() {
+        return newsSources;
+    }
+
+    /** Public Telegram channel names without the leading {@code @}. */
+    public List<String> telegramChannels() {
+        return telegramChannels;
+    }
+
+    /** The Google News edition parameters, for example {@code hl=en-CA&gl=CA&ceid=CA:en}. */
+    public String newsGoogleEdition() {
+        return newsGoogleEdition;
+    }
+
+    /** The disaster types to look for (never empty). */
+    public List<IncidentType> newsTopics() {
+        return newsTopics;
+    }
+
     /** Human-readable summary that is safe to print, log or show on screen (no secrets). */
     public String describe() {
         return String.join(
@@ -126,12 +202,56 @@ public final class AppConfig {
                 "LLM base URL : " + llmBaseUrl,
                 "LLM API key  : " + (llmApiKey != null ? "set" : "not set"),
                 "Database URL : " + dbUrl,
-                "Map tiles    : " + mapTiles);
+                "Database user: " + dbUser + (dbPassword.isEmpty() ? " (no password)" : " (password set)"),
+                "Map tiles    : " + mapTiles,
+                "News sources : " + newsSources.stream().map(t -> t.name().toLowerCase(Locale.ROOT)).toList(),
+                "Telegram     : " + (telegramChannels.isEmpty() ? "(none)" : telegramChannels.size() + " channel(s)"),
+                "News topics  : " + newsTopics.stream().map(IncidentType::keyword).toList());
     }
 
     @Override
     public String toString() {
         return "AppConfig[" + describe().replace(System.lineSeparator(), ", ") + "]";
+    }
+
+    // ---- list settings ------------------------------------------------------------------------
+
+    /** Splits {@code a, b,,c} into {@code [a, b, c]}: trimmed, no blanks, no repeats, order kept. */
+    static List<String> splitList(String raw) {
+        if (raw == null) {
+            return List.of();
+        }
+        return List.copyOf(new LinkedHashSet<>(Arrays.stream(raw.split(","))
+                .map(String::strip)
+                .map(item -> item.startsWith("@") ? item.substring(1).strip() : item)
+                .filter(item -> !item.isEmpty())
+                .toList()));
+    }
+
+    private static List<NewsSourceType> parseSources(String raw) {
+        List<NewsSourceType> sources = new ArrayList<>();
+        for (String name : splitList(raw)) {
+            NewsSourceType type = NewsSourceType.parse(name);
+            if (!sources.contains(type)) {
+                sources.add(type);
+            }
+        }
+        return sources.isEmpty() ? List.of(NewsSourceType.DEMO) : List.copyOf(sources);
+    }
+
+    private static List<IncidentType> parseTopics(String raw) {
+        List<IncidentType> topics = new ArrayList<>();
+        try {
+            for (String name : splitList(raw)) {
+                IncidentType type = IncidentType.parse(name);
+                if (!topics.contains(type)) {
+                    topics.add(type);
+                }
+            }
+        } catch (IllegalArgumentException e) {
+            throw new ConfigException("Invalid NEWS_TOPICS: " + e.getMessage(), e);
+        }
+        return topics.isEmpty() ? List.of(IncidentType.values()) : List.copyOf(topics);
     }
 
     // ---- .env parsing -------------------------------------------------------------------------

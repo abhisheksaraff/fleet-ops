@@ -28,7 +28,12 @@ Then edit `.env`. The default `LLM_PROVIDER=mock` needs no key and no network. T
 | `LLM_API_KEY` | API key (required for `gemini`) | none |
 | `LLM_MODEL` | Model name | provider default |
 | `LLM_BASE_URL` | Ollama server URL | `http://localhost:11434` |
-| `DB_URL` | Embedded H2 database URL | `jdbc:h2:./data/fleetops` |
+| `DB_URL` | JDBC URL of the incident database, or `memory` for no saving | `jdbc:h2:./data/fleetops` |
+| `DB_USER` / `DB_PASSWORD` | Database login (only needed outside the embedded H2 default) | `sa` / empty |
+| `NEWS_SOURCES` | `demo`, `google`, `telegram` (comma separated) | `demo` |
+| `TELEGRAM_CHANNELS` | Public channel names, used when `telegram` is a source | none |
+| `NEWS_GOOGLE_EDITION` | Google News language and country | `hl=en-CA&gl=CA&ceid=CA:en` |
+| `NEWS_TOPICS` | `flood`, `famine`, `fire`, `earthquake` (blank = all) | all four |
 | `MAP_TILES` | Map tile source | `osm` |
 
 ## Run

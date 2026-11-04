@@ -16,6 +16,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <junit.version>5.11.4</junit.version>
     <picocli.version>4.7.6</picocli.version>
+    <h2.version>2.3.232</h2.version>
     <!-- Default entry point for `mvn exec:java`; override with -Dexec.mainClass=... -->
     <exec.mainClass>com.fleetops.gui.FleetOpsGui</exec.mainClass>
   </properties>
@@ -25,6 +26,15 @@
       <groupId>info.picocli</groupId>
       <artifactId>picocli</artifactId>
       <version>${picocli.version}</version>
+    </dependency>
+
+    <!-- Embedded database. Runtime scope on purpose: the code only uses java.sql, so another
+         JDBC driver can replace this one by changing DB_URL and this dependency. -->
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <version>${h2.version}</version>
+      <scope>runtime</scope>
     </dependency>
 
     <dependency>
