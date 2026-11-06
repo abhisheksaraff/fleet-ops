@@ -59,6 +59,7 @@ public final class AppContext implements AutoCloseable {
     private NewsSource newsSource;
     private IntelligenceService intelligence;
     private ResponsePlanner planner;
+    private boolean keepOpen;
 
     private AppContext(AppConfig config, Clock clock) {
         this.config = config;
@@ -143,9 +144,28 @@ public final class AppContext implements AutoCloseable {
         return planner;
     }
 
-    /** Closes the database if one was opened. Safe to call more than once. */
+    /**
+     * Makes {@link #close()} do nothing from now on, so code that closes the context it is given (every
+     * command-line command does) can run against a context that its caller still owns, as the GUI's
+     * console does. The owner ends the context with {@link #shutdown()}.
+     */
+    public synchronized AppContext keepOpen() {
+        keepOpen = true;
+        return this;
+    }
+
+    /** Closes the database for real, even after {@link #keepOpen()}. */
+    public synchronized void shutdown() {
+        keepOpen = false;
+        close();
+    }
+
+    /** Closes the database if one was opened. Safe to call more than once; does nothing after {@link #keepOpen()}. */
     @Override
     public synchronized void close() {
+        if (keepOpen) {
+            return;
+        }
         if (repository instanceof AutoCloseable closeable) {
             try {
                 closeable.close();

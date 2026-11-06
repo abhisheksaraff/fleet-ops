@@ -60,7 +60,6 @@ final class MainFrame extends JFrame {
     private static final double RELOCATE_KM = SafetyPolicy.DEFAULT_SERVICE_RADIUS_KM * 0.6;
     private static final long SEED = 42;
     private static final long MAX_TICKS_PER_FRAME = 200;
-    private static final int MAX_LOG_LINES = 1500;
     private static final Integer[] SPEEDS = {30, 60, 120, 300, 600, 1200};
 
     private final transient AppContext app;
@@ -70,7 +69,7 @@ final class MainFrame extends JFrame {
     private final transient MapOverlay overlay;
     private int frame;
     private final MissionCard card = new MissionCard(this::planSelected, this::abortSelected);
-    private final JTextArea log = new JTextArea(7, 80);
+    private Console console;
     private final JLabel status = new JLabel(" ");
     private Workspace workspace;
 
@@ -96,9 +95,7 @@ final class MainFrame extends JFrame {
         this.app = app;
         this.onExit = onExit;
 
-        if (!MapTiles.isKnown(app.config().mapTiles())) {
-            appendLog("MAP_TILES='" + app.config().mapTiles() + "' is not supported; using the dark map (use dark or osm).");
-        }
+        app.keepOpen(); // the console runs commands that close the context they are given
         overlay = new MapOverlay(incidentList::all, () -> engineForMap, this::selectedIncident,
                 () -> rig == null ? List.of() : rig.control().activeMissions());
         map = new MapPanel(MapTiles.create(app.config().mapTiles()), MapTiles.attribution(app.config().mapTiles()),
@@ -112,6 +109,9 @@ final class MainFrame extends JFrame {
 
         buildLayout();
         wireActions();
+        if (!MapTiles.isKnown(app.config().mapTiles())) {
+            appendLog("MAP_TILES='" + app.config().mapTiles() + "' is not supported; using the dark map (use dark or osm).");
+        }
 
         speed.setSelectedItem(300);
         timer = new Timer(TIMER_MS, e -> onTimer());
@@ -135,12 +135,6 @@ final class MainFrame extends JFrame {
     // ---- layout ---------------------------------------------------------------------------------
 
     private void buildLayout() {
-        log.setEditable(false);
-        log.setFont(Theme.mono(12f));
-        log.setBackground(Theme.CONSOLE_BG);
-        log.setForeground(Theme.TEXT);
-        log.setBorder(BorderFactory.createEmptyBorder(6, 12, 6, 12));
-
         Ui.primary(scanButton);
         Ui.secondary(clearButton);
         Ui.primary(runButton);
@@ -214,15 +208,20 @@ final class MainFrame extends JFrame {
         sidebar.setMinimumSize(new Dimension(0, 0));
 
         // ---- console ---------------------------------------------------------------------------
+        console = new Console(new ConsoleHost());
         JPanel consolePanel = new JPanel(new BorderLayout());
         consolePanel.setBackground(Theme.CONSOLE_BG);
-        JLabel consoleTitle = Ui.caption("Events");
-        consoleTitle.setBorder(BorderFactory.createEmptyBorder(8, 12, 4, 12));
-        consolePanel.add(consoleTitle, BorderLayout.NORTH);
-        JScrollPane logPane = new JScrollPane(log);
-        logPane.setBorder(null);
-        logPane.getViewport().setBackground(Theme.CONSOLE_BG);
-        consolePanel.add(logPane, BorderLayout.CENTER);
+        JLabel consoleTitle = Ui.caption("Console");
+        JLabel consoleHint = new JLabel("scan \u00B7 incidents \u00B7 show \u00B7 run \u00B7 help");
+        consoleHint.setForeground(Theme.MUTED);
+        consoleHint.setFont(Theme.mono(11f));
+        JPanel consoleHead = new JPanel(new BorderLayout());
+        consoleHead.setOpaque(false);
+        consoleHead.setBorder(BorderFactory.createEmptyBorder(8, 14, 2, 14));
+        consoleHead.add(consoleTitle, BorderLayout.WEST);
+        consoleHead.add(consoleHint, BorderLayout.EAST);
+        consolePanel.add(consoleHead, BorderLayout.NORTH);
+        consolePanel.add(console, BorderLayout.CENTER);
 
         workspace = new Workspace(sidebar, map, consolePanel, Preferences.userNodeForPackage(MainFrame.class));
         HeaderBar header = new HeaderBar(workspace);
@@ -313,15 +312,7 @@ final class MainFrame extends JFrame {
     }
 
     private void appendLog(String line) {
-        log.append(line + "\n");
-        if (log.getLineCount() > MAX_LOG_LINES) {
-            try {
-                log.getDocument().remove(0, log.getLineStartOffset(log.getLineCount() - MAX_LOG_LINES));
-            } catch (javax.swing.text.BadLocationException ignored) {
-                // the log is only informational
-            }
-        }
-        log.setCaretPosition(log.getDocument().getLength());
+        console.event(line);
     }
 
     // ---- simulation clock -----------------------------------------------------------------------
@@ -551,12 +542,65 @@ final class MainFrame extends JFrame {
             rig.control().abortAll("the window was closed");
             rig.control().runUntilSettled(MAX_TICKS_PER_FRAME * 100);
         }
-        app.close();
+        app.shutdown();
         dispose();
         onExit.run();
     }
 
+    /** What the console may ask of this window. */
+    private final class ConsoleHost implements Console.Host {
+        @Override
+        public AppContext app() {
+            return app;
+        }
+
+        @Override
+        public boolean busy() {
+            return busy;
+        }
+
+        @Override
+        public boolean missionRunning() {
+            return rig != null && !rig.control().activeMissions().isEmpty();
+        }
+
+        @Override
+        public void setBusy(boolean value, String message) {
+            MainFrame.this.setBusy(value, message);
+        }
+
+        @Override
+        public void commandFinished(String command, int exitCode) {
+            if (command.equals("reset") && !missionRunning()) {
+                rig = null; // the fleet and survivors of deleted incidents go with them
+                engineForMap = null;
+            }
+            boolean hadIncidents = !incidentList.all().isEmpty();
+            refreshIncidents();
+            if (command.equals("scan") && !hadIncidents && !incidentList.all().isEmpty()) {
+                map.fit(incidentList.all());
+            }
+            map.repaint();
+        }
+
+        @Override
+        public List<Long> incidentIds() {
+            return incidentList.all().stream().flatMap(i -> i.id().stream()).toList();
+        }
+
+        @Override
+        public void hide() {
+            if (workspace.consoleOpen()) {
+                workspace.toggleConsole();
+            }
+        }
+    }
+
     // ---- hooks for tests ------------------------------------------------------------------------
+
+    Console console() {
+        return console;
+    }
 
     MapOverlay overlay() {
         return overlay;
