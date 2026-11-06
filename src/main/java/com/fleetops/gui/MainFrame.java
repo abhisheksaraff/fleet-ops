@@ -10,8 +10,10 @@ import com.fleetops.mission.Mission;
 import com.fleetops.mission.MissionControl;
 import com.fleetops.mission.MissionReport;
 import com.fleetops.plan.MissionPlan;
+import com.fleetops.safety.SafetyPolicy;
 import com.fleetops.sim.SimulationEngine;
 import com.fleetops.sim.SimulationEvent;
+import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -23,6 +25,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
+import java.util.prefs.Preferences;
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
@@ -33,7 +36,6 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
-import javax.swing.JSplitPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.ListSelectionModel;
@@ -56,6 +58,8 @@ final class MainFrame extends JFrame {
     private static final long serialVersionUID = 1L;
     private static final int TIMER_MS = 40;
     private static final double DEPOT_KM = 30.0;
+    /** Beyond this the rover could not reach an incident within the safety gate's service area. */
+    private static final double RELOCATE_KM = SafetyPolicy.DEFAULT_SERVICE_RADIUS_KM * 0.6;
     private static final long SEED = 42;
     private static final long MAX_TICKS_PER_FRAME = 200;
     private static final int MAX_LOG_LINES = 1500;
@@ -69,11 +73,12 @@ final class MainFrame extends JFrame {
     private final JTextArea details = new JTextArea(5, 30);
     private final JTextArea log = new JTextArea(7, 80);
     private final JLabel status = new JLabel(" ");
+    private Workspace workspace;
 
     private final JButton scanButton = new JButton("Scan news");
     private final JButton clearButton = new JButton("Clear finished");
-    private final JButton runButton = new JButton("Plan mission...");
-    private final JButton abortButton = new JButton("Abort selected");
+    private final JButton runButton = new JButton("Plan mission");
+    private final JButton abortButton = new JButton("Abort");
     private final JButton abortAllButton = new JButton("Abort all");
     private final JButton resetButton = new JButton("Reset fleet");
     private final JSpinner rovers = new JSpinner(new SpinnerNumberModel(FleetLayout.DEFAULT.rovers(), 1, FleetLayout.MAX_ROVERS, 1));
@@ -120,7 +125,8 @@ final class MainFrame extends JFrame {
         });
         refreshIncidents();
         updateButtons();
-        setPreferredSize(new Dimension(1280, 800));
+        setPreferredSize(new Dimension(1440, 880));
+        setMinimumSize(new Dimension(760, 520));
         pack();
         setLocationRelativeTo(null);
     }
@@ -130,79 +136,145 @@ final class MainFrame extends JFrame {
     private void buildLayout() {
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.setAutoCreateRowSorter(false);
+        table.setFillsViewportHeight(true);
+        table.setShowGrid(false);
+        table.getTableHeader().setReorderingAllowed(false);
         table.getColumnModel().getColumn(0).setPreferredWidth(30);
-        table.getColumnModel().getColumn(1).setPreferredWidth(80);
+        table.getColumnModel().getColumn(1).setPreferredWidth(74);
         table.getColumnModel().getColumn(2).setPreferredWidth(100);
         table.getColumnModel().getColumn(3).setPreferredWidth(80);
-        table.getColumnModel().getColumn(4).setPreferredWidth(55);
-        table.getColumnModel().getColumn(5).setPreferredWidth(220);
+        table.getColumnModel().getColumn(4).setPreferredWidth(58);
+        table.getColumnModel().getColumn(5).setPreferredWidth(200);
+        javax.swing.table.DefaultTableCellRenderer left = new javax.swing.table.DefaultTableCellRenderer();
+        left.setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
+        left.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
+        for (int column = 0; column < table.getColumnCount(); column++) {
+            table.getColumnModel().getColumn(column).setCellRenderer(left);
+        }
+        ((javax.swing.table.DefaultTableCellRenderer) table.getTableHeader().getDefaultRenderer())
+                .setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
 
         details.setEditable(false);
         details.setLineWrap(true);
         details.setWrapStyleWord(true);
-        details.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
+        details.setBackground(Theme.RAISED);
+        details.setForeground(Theme.TEXT);
+        details.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
         log.setEditable(false);
-        log.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        log.setFont(Theme.mono(12f));
+        log.setBackground(Theme.CONSOLE_BG);
+        log.setForeground(Theme.TEXT);
+        log.setBorder(BorderFactory.createEmptyBorder(6, 12, 6, 12));
 
-        JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
-        top.add(scanButton);
-        top.add(clearButton);
-        top.add(new JLabel("Click an incident square on the map or in the list. Double-click a square to plan."));
+        Ui.primary(scanButton);
+        Ui.secondary(clearButton);
+        Ui.primary(runButton);
+        Ui.danger(abortButton);
+        Ui.danger(abortAllButton);
+        Ui.secondary(resetButton);
+        for (JSpinner spinner : List.of(rovers, drones, helicopters)) {
+            ((JSpinner.DefaultEditor) spinner.getEditor()).getTextField().setColumns(2);
+        }
 
-        JPanel missionRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
+        // ---- sidebar: incidents on top, the rest below -----------------------------------------
+        JPanel actions = new JPanel(new GridLayout(1, 2, 8, 0));
+        actions.setOpaque(false);
+        actions.add(scanButton);
+        actions.add(clearButton);
+
+        JPanel head = new JPanel();
+        head.setOpaque(false);
+        head.setLayout(new BoxLayout(head, BoxLayout.Y_AXIS));
+        head.add(Ui.caption("Incidents"));
+        head.add(javax.swing.Box.createVerticalStrut(8));
+        head.add(actions);
+        head.add(javax.swing.Box.createVerticalStrut(10));
+        for (java.awt.Component c : head.getComponents()) {
+            ((javax.swing.JComponent) c).setAlignmentX(0f);
+        }
+
+        JPanel missionRow = new JPanel(new GridLayout(1, 3, 8, 0));
+        missionRow.setOpaque(false);
         missionRow.add(runButton);
         missionRow.add(abortButton);
         missionRow.add(abortAllButton);
 
-        JPanel fleetRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
-        fleetRow.add(new JLabel("Rovers"));
+        JPanel fleetRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        fleetRow.setOpaque(false);
+        fleetRow.add(Ui.muted("Rovers"));
         fleetRow.add(rovers);
-        fleetRow.add(new JLabel("Drones each"));
+        fleetRow.add(Ui.muted("Drones each"));
         fleetRow.add(drones);
-        fleetRow.add(new JLabel("Helicopters"));
+        fleetRow.add(Ui.muted("Helicopters"));
         fleetRow.add(helicopters);
-        fleetRow.add(resetButton);
 
-        JPanel speedRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
-        speedRow.add(new JLabel("Simulation speed"));
+        JPanel speedRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        speedRow.setOpaque(false);
+        speedRow.add(Ui.muted("Simulation speed"));
         speedRow.add(speed);
-        speedRow.add(new JLabel("x real time"));
+        speedRow.add(Ui.muted("x real time"));
+        speedRow.add(resetButton);
 
-        JPanel right = new JPanel();
-        right.setLayout(new BoxLayout(right, BoxLayout.Y_AXIS));
-        right.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
-        JScrollPane tablePane = new JScrollPane(table);
-        tablePane.setPreferredSize(new Dimension(480, 260));
         JScrollPane detailPane = new JScrollPane(details);
-        detailPane.setPreferredSize(new Dimension(480, 110));
-        detailPane.setBorder(BorderFactory.createTitledBorder("Selected incident"));
-        for (JPanel row : List.of(top, missionRow, fleetRow, speedRow)) {
-            row.setAlignmentX(0f);
+        detailPane.setBorder(BorderFactory.createLineBorder(Theme.BORDER));
+        detailPane.setPreferredSize(new Dimension(100, 104));
+        detailPane.setMinimumSize(new Dimension(0, 60));
+
+        JPanel foot = new JPanel();
+        foot.setOpaque(false);
+        foot.setLayout(new BoxLayout(foot, BoxLayout.Y_AXIS));
+        foot.add(javax.swing.Box.createVerticalStrut(10));
+        foot.add(Ui.caption("Selected"));
+        foot.add(javax.swing.Box.createVerticalStrut(8));
+        foot.add(detailPane);
+        foot.add(javax.swing.Box.createVerticalStrut(10));
+        foot.add(missionRow);
+        foot.add(javax.swing.Box.createVerticalStrut(14));
+        foot.add(Ui.caption("Fleet"));
+        foot.add(javax.swing.Box.createVerticalStrut(6));
+        foot.add(fleetRow);
+        foot.add(javax.swing.Box.createVerticalStrut(10));
+        foot.add(speedRow);
+        for (java.awt.Component c : foot.getComponents()) {
+            ((javax.swing.JComponent) c).setAlignmentX(0f);
         }
-        tablePane.setAlignmentX(0f);
-        detailPane.setAlignmentX(0f);
-        right.add(top);
-        right.add(tablePane);
-        right.add(detailPane);
-        right.add(missionRow);
-        right.add(fleetRow);
-        right.add(speedRow);
 
-        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, map, right);
-        split.setResizeWeight(1.0);
-        split.setDividerLocation(780);
+        JPanel sidebar = new JPanel(new BorderLayout());
+        sidebar.setBackground(Theme.PANEL);
+        sidebar.setBorder(BorderFactory.createEmptyBorder(14, 14, 14, 14));
+        sidebar.add(head, BorderLayout.NORTH);
+        sidebar.add(Ui.scroll(table), BorderLayout.CENTER);
+        sidebar.add(foot, BorderLayout.SOUTH);
+        sidebar.setMinimumSize(new Dimension(0, 0));
 
-        JPanel bottom = new JPanel(new BorderLayout());
+        // ---- console ---------------------------------------------------------------------------
+        JPanel consolePanel = new JPanel(new BorderLayout());
+        consolePanel.setBackground(Theme.CONSOLE_BG);
+        JLabel consoleTitle = Ui.caption("Events");
+        consoleTitle.setBorder(BorderFactory.createEmptyBorder(8, 12, 4, 12));
+        consolePanel.add(consoleTitle, BorderLayout.NORTH);
         JScrollPane logPane = new JScrollPane(log);
-        logPane.setPreferredSize(new Dimension(800, 130));
-        logPane.setBorder(BorderFactory.createTitledBorder("Events"));
-        bottom.add(logPane, BorderLayout.CENTER);
-        status.setBorder(BorderFactory.createEmptyBorder(2, 8, 4, 8));
-        bottom.add(status, BorderLayout.SOUTH);
+        logPane.setBorder(null);
+        logPane.getViewport().setBackground(Theme.CONSOLE_BG);
+        consolePanel.add(logPane, BorderLayout.CENTER);
 
+        workspace = new Workspace(sidebar, map, consolePanel, Preferences.userNodeForPackage(MainFrame.class));
+        HeaderBar header = new HeaderBar(workspace);
+
+        status.setForeground(Theme.MUTED);
+        status.setBorder(BorderFactory.createEmptyBorder(4, 14, 5, 14));
+        JPanel statusBar = new JPanel(new BorderLayout());
+        statusBar.setBackground(Theme.PANEL);
+        statusBar.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Theme.BORDER));
+        statusBar.add(status, BorderLayout.CENTER);
+
+        if (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac")) {
+            getRootPane().putClientProperty(FlatClientProperties.FULL_WINDOW_CONTENT, true);
+        }
         setLayout(new BorderLayout());
-        add(split, BorderLayout.CENTER);
-        add(bottom, BorderLayout.SOUTH);
+        add(header, BorderLayout.NORTH);
+        add(workspace, BorderLayout.CENTER);
+        add(statusBar, BorderLayout.SOUTH);
     }
 
     private void wireActions() {
@@ -220,6 +292,9 @@ final class MainFrame extends JFrame {
         });
         scanButton.addActionListener(e -> scan());
         clearButton.addActionListener(e -> clearFinished());
+        runButton.setToolTipText("Ask the AI for a plan for the selected incident");
+        abortButton.setToolTipText("Stop the mission of the selected incident");
+        abortAllButton.setToolTipText("Stop every running mission");
         runButton.addActionListener(e -> planSelected());
         abortButton.addActionListener(e -> abortSelected());
         abortAllButton.addActionListener(e -> {
@@ -404,11 +479,18 @@ final class MainFrame extends JFrame {
     }
 
     private void approve(MissionControl control, MissionPlan plan) {
-        JTextArea text = new JTextArea(plan.describe(), 12, 70);
+        JTextArea text = new JTextArea(plan.describe(), 12, 64);
         text.setEditable(false);
-        text.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        int choice = JOptionPane.showOptionDialog(this, new JScrollPane(text), "Approve this mission?",
-                JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, new Object[] {"Launch", "Cancel"}, "Launch");
+        text.setLineWrap(true);
+        text.setWrapStyleWord(true);
+        text.setFont(Theme.mono(12f));
+        text.setBackground(Theme.CONSOLE_BG);
+        text.setBorder(BorderFactory.createEmptyBorder(10, 12, 10, 12));
+        JScrollPane planPane = new JScrollPane(text);
+        planPane.setBorder(BorderFactory.createLineBorder(Theme.BORDER));
+        planPane.setPreferredSize(new Dimension(620, 280));
+        int choice = JOptionPane.showOptionDialog(this, planPane, "Approve this mission?",
+                JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new Object[] {"Launch", "Cancel"}, "Launch");
         try {
             if (choice == 0) {
                 Mission mission = control.launch(plan);
@@ -469,13 +551,25 @@ final class MainFrame extends JFrame {
         }
         rig = null;
         engineForMap = null;
-        appendLog("Fleet reset. A new fleet will be placed " + (int) DEPOT_KM + " km south of the next incident you plan.");
+        appendLog("Fleet reset. A fresh fleet will be placed " + (int) DEPOT_KM + " km south of the next incident you plan.");
         map.repaint();
         updateButtons();
     }
 
-    /** Builds the fleet on first use, parked south of the incident that is planned first. */
+    /**
+     * Builds the fleet on first use, parked south of the incident that is planned first. When the
+     * fleet is idle and the next incident is outside its service area, the fleet is moved to a new
+     * base near that incident; while missions are running it stays put and the planner explains why
+     * it cannot reach the incident.
+     */
     private SimulationRig ensureRig(Incident near) {
+        if (rig != null && rig.control().activeMissions().isEmpty() && rig.control().queue().isIdle()
+                && rig.depot().distanceKmTo(near.area().center()) > RELOCATE_KM) {
+            appendLog(String.format(Locale.ROOT, "'%s' is %.0f km from the fleet's base; moving the fleet there.",
+                    near.title(), rig.depot().distanceKmTo(near.area().center())));
+            rig = null;
+            engineForMap = null;
+        }
         if (rig == null) {
             FleetLayout layout = new FleetLayout((Integer) rovers.getValue(), (Integer) drones.getValue(), (Integer) helicopters.getValue());
             rig = SimulationRig.create(app, layout, near.area().center().offsetByKm(-DEPOT_KM, 0), SEED);
@@ -523,6 +617,7 @@ final class MainFrame extends JFrame {
 
     private void shutdown() {
         timer.stop();
+        workspace.savePreferences();
         if (rig != null) {
             rig.control().abortAll("the window was closed");
             rig.control().runUntilSettled(MAX_TICKS_PER_FRAME * 100);

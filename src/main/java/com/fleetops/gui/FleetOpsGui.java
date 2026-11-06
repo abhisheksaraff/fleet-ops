@@ -14,10 +14,13 @@ public final class FleetOpsGui {
     private FleetOpsGui() {}
 
     public static void main(String[] args) {
+        System.setProperty("apple.awt.application.name", "FleetOps");
+        System.setProperty("apple.laf.useScreenMenuBar", "true");
         SwingUtilities.invokeLater(FleetOpsGui::start);
     }
 
     private static void start() {
+        Theme.install();
         AppContext context;
         try {
             context = AppContext.fromEnvironment();
