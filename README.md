@@ -90,10 +90,26 @@ run 1 --progress
 
 `mvn -q exec:java` opens the map window (dark map tiles, so it needs internet access to show the map).
 
-1. **Scan news** reads the configured feeds, has the AI verify them and adds incidents to the list and the map.
-2. Click an incident square on the map (or a row in the list) to select it. Double-click a square, or press **Plan mission...**, to have the AI plan the response.
-3. Read the plan and press **Launch**. The rover drives to the south edge of the square, drones sweep it (found people appear as red dots) and helicopters carry them out (rescued people turn green).
-4. **Abort selected** / **Abort all** stop missions and bring the units home. **Reset fleet** rebuilds the fleet near the next incident you plan. **Clear finished** deletes completed incidents from the database. The speed box sets how fast simulated time runs.
+**Layout.** The header has presets (**Map**, **Map + list**, **Control**) and buttons to hide the sidebar and the console. Drag the dividers to resize either; the sizes are remembered.
+
+**Working with incidents.**
+1. **Scan news** (or `scan` in the console) reads the configured feeds, has the AI verify them and adds incidents to the sidebar cards and the map.
+2. Click a card or a map marker to select it. A floating card on the map shows the incident and its mission.
+3. Press **Plan rescue** on the card, read the plan and press **Launch**. The rover drives to the edge of the square, drones sweep it (found people appear as red dots) and helicopters carry them out (rescued people turn green).
+4. **Abort mission** stops a mission and brings the units home. In the sidebar, **Abort all**, **Reset fleet** and **Clear finished** manage the rest, and the speed box sets how fast simulated time runs.
+
+**Console.** The panel at the bottom runs the same commands as the command line against the same database (`scan`, `incidents`, `show <id>`, `run <id>`, `reset`, `config`). Up/Down recalls history, Tab completes, Ctrl+L clears. These commands also drive the window:
+
+| Command | Effect |
+|---|---|
+| `plan <id>` | plan a verified incident and print the plan |
+| `launch` / `cancel` | start or drop the plan that is waiting |
+| `abort [id\|all]` | stop one mission (default: the selected one) or all |
+| `focus <id\|all>` | select an incident and zoom the map to it |
+| `speed [n]` | show or set the simulation speed |
+| `fleet [r d h]` | show or set rovers, drones per rover and helicopters |
+| `layout <map\|list\|control\|sidebar\|console>` | change the window layout |
+| `help`, `clear`, `exit` | list commands, clear the screen, hide the console |
 
 In IntelliJ you can also run `FleetOpsGui` or `FleetOpsCli` directly from their `main` methods.
 

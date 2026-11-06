@@ -55,7 +55,8 @@ final class Console extends JPanel {
     private static final int MAX_LINES = 2500;
     private static final int MAX_HISTORY = 200;
     private static final float FONT_SIZE = 13f;
-    private static final List<String> BUILT_INS = List.of("help", "clear", "exit");
+    private static final List<String> BUILT_INS = java.util.stream.Stream.concat(
+            java.util.stream.Stream.of("help", "clear", "exit"), WindowCommands.NAMES.stream()).toList();
 
     /** What the console needs from the window around it. */
     interface Host {
@@ -75,6 +76,12 @@ final class Console extends JPanel {
 
         /** Hides the console (the {@code exit} command). */
         void hide();
+
+        /** Runs a command that drives the window (plan, launch, focus, ...); false if it is not one. */
+        boolean windowCommand(String name, List<String> args, WindowCommands.Output out);
+
+        /** Candidates for the first argument of a window command, for Tab. */
+        List<String> windowArguments(String command);
     }
 
     private final transient Host host;
@@ -105,6 +112,17 @@ final class Console extends JPanel {
         return t;
     });
     private volatile boolean running;
+    private final transient WindowCommands.Output output = new WindowCommands.Output() {
+        @Override
+        public void line(String text) {
+            write(text + "\n", false);
+        }
+
+        @Override
+        public void error(String text) {
+            write(text + "\n", true);
+        }
+    };
 
     Console(Host host) {
         super(new BorderLayout());
@@ -115,7 +133,7 @@ final class Console extends JPanel {
         cli.setColorScheme(CommandLine.Help.defaultColorScheme(CommandLine.Help.Ansi.OFF));
         cli.setOut(new PrintWriter(new Sink(false), true));
         cli.setErr(new PrintWriter(new Sink(true), true));
-        completer = new ConsoleCompleter(cli, BUILT_INS, host::incidentIds);
+        completer = new ConsoleCompleter(cli, BUILT_INS, host::incidentIds, host::windowArguments);
 
         pane.setEditable(false);
         pane.setBackground(Theme.CONSOLE_BG);
@@ -196,7 +214,11 @@ final class Console extends JPanel {
             case "help", "?" -> help();
             case "clear", "cls" -> clear();
             case "exit", "quit" -> host.hide();
-            default -> execute(name, args);
+            default -> {
+                if (!host.windowCommand(name, args, output)) {
+                    execute(name, args);
+                }
+            }
         }
     }
 
@@ -274,23 +296,36 @@ final class Console extends JPanel {
     }
 
     private void help() {
-        String[][] rows = {
+        String[][] shell = {
             {"scan [-t TYPE] [-v]", "read the news, let the AI verify it, store new incidents"},
             {"incidents", "list the stored incidents"},
             {"show <id>", "everything about one incident"},
-            {"run <id> [-y] [--progress]", "plan and simulate a mission here (it is not drawn on the map)"},
+            {"run <id> [-y] [--progress]", "simulate a mission here without the map"},
             {"reset [-f] [-y]", "delete stored incidents"},
             {"config", "show the active configuration"},
-            {"clear", "clear this screen"},
-            {"exit", "hide the console"},
         };
-        println("Commands", Theme.MUTED, true, true);
-        for (String[] row : rows) {
+        String[][] map = {
+            {"plan <id>", "ask the AI for a plan for a verified incident"},
+            {"launch", "start the plan that is waiting"},
+            {"cancel", "drop the plan that is waiting"},
+            {"abort [id|all]", "stop a mission (default: the selected one)"},
+            {"focus <id|all>", "select an incident and zoom the map to it"},
+            {"speed [n]", "show or set how fast simulated time runs"},
+            {"fleet [r d h]", "show or set rovers, drones per rover, helicopters"},
+            {"layout [name]", "map | list | control | sidebar | console"},
+        };
+        println("Commands that work on the stored incidents", Theme.MUTED, true, true);
+        for (String[] row : shell) {
             print(String.format(Locale.ROOT, "  %-30s", row[0]), Theme.ACCENT, false);
             print(row[1] + "\n", Theme.TEXT, false);
         }
-        println("Add --help to any command for its options.  Up/Down: history   Tab: complete   Ctrl+L: clear",
-                Theme.MUTED, false, true);
+        println("Commands that drive the map", Theme.MUTED, true, true);
+        for (String[] row : map) {
+            print(String.format(Locale.ROOT, "  %-30s", row[0]), Theme.ACCENT, false);
+            print(row[1] + "\n", Theme.TEXT, false);
+        }
+        println("Also: clear, exit.  Add --help to a stored-incident command for its options.", Theme.MUTED, false, true);
+        println("Up/Down: history   Tab: complete   Ctrl+L: clear", Theme.MUTED, false, true);
     }
 
     private void printBanner() {

@@ -68,7 +68,22 @@ final class MainFrame extends JFrame {
     private final MapPanel map;
     private final transient MapOverlay overlay;
     private int frame;
-    private final MissionCard card = new MissionCard(this::planSelected, this::abortSelected);
+    private final transient WindowCommands.Output logOutput = new WindowCommands.Output() {
+        @Override
+        public void line(String text) {
+            appendLog(text);
+        }
+
+        @Override
+        public void error(String text) {
+            appendLog("Error: " + text);
+        }
+    };
+    private final MissionCard card = new MissionCard(this::planSelected, this::abortSelected,
+            () -> consoleLaunch(logOutput), () -> consoleCancel(logOutput));
+    private final transient WindowCommands windowCommands = new WindowCommands(this);
+    private transient MissionPlan pendingPlan;
+    private transient MissionControl pendingControl;
     private Console console;
     private final JLabel status = new JLabel(" ");
     private Workspace workspace;
@@ -212,7 +227,7 @@ final class MainFrame extends JFrame {
         JPanel consolePanel = new JPanel(new BorderLayout());
         consolePanel.setBackground(Theme.CONSOLE_BG);
         JLabel consoleTitle = Ui.caption("Console");
-        JLabel consoleHint = new JLabel("scan \u00B7 incidents \u00B7 show \u00B7 run \u00B7 help");
+        JLabel consoleHint = new JLabel("scan \u00B7 incidents \u00B7 plan \u00B7 launch \u00B7 focus \u00B7 help");
         consoleHint.setForeground(Theme.MUTED);
         consoleHint.setFont(Theme.mono(11f));
         JPanel consoleHead = new JPanel(new BorderLayout());
@@ -291,10 +306,10 @@ final class MainFrame extends JFrame {
         boolean active = rig != null && !rig.control().activeMissions().isEmpty();
         scanButton.setEnabled(!busy);
         clearButton.setEnabled(!busy && !active && incidentList.all().stream().anyMatch(i -> !i.isActive()));
-        runButton.setEnabled(!busy && selected != null && selected.state() == IncidentState.VERIFIED);
+        runButton.setEnabled(!busy && pendingPlan == null && selected != null && selected.state() == IncidentState.VERIFIED);
         abortButton.setEnabled(!busy && selected != null && rig != null && rig.control().missionFor(selected).filter(m -> !m.isFinished()).isPresent());
         abortAllButton.setEnabled(!busy && active);
-        resetButton.setEnabled(!busy && !active);
+        resetButton.setEnabled(!busy && !active && pendingPlan == null);
         rovers.setEnabled(!active);
         drones.setEnabled(!active);
         helicopters.setEnabled(!active);
@@ -308,7 +323,8 @@ final class MainFrame extends JFrame {
             return;
         }
         Mission mission = rig == null ? null : rig.control().missionFor(selected).orElse(null);
-        card.show(selected, mission, rig == null ? 0 : rig.engine().elapsedSeconds(), busy);
+        card.show(selected, mission, rig == null ? 0 : rig.engine().elapsedSeconds(), busy,
+                pendingPlan != null && pendingPlan.incident() == selected);
     }
 
     private void appendLog(String line) {
@@ -377,11 +393,27 @@ final class MainFrame extends JFrame {
         if (incident == null || busy || incident.state() != IncidentState.VERIFIED) {
             return;
         }
+        if (pendingPlan != null) {
+            appendLog("A plan is waiting: type launch or cancel first.");
+            return;
+        }
+        planIncident(incident, null);
+    }
+
+    /**
+     * Makes a plan for an incident. With no {@code out} the operator approves it in a dialog; with one
+     * (the console) the plan is printed and kept until {@code launch} or {@code cancel}.
+     */
+    private void planIncident(Incident incident, WindowCommands.Output out) {
         SimulationRig current;
         try {
             current = ensureRig(incident);
         } catch (RuntimeException e) {
-            showError("Could not set up the fleet", e);
+            if (out == null) {
+                showError("Could not set up the fleet", e);
+            } else {
+                out.error("Could not set up the fleet: " + e.getMessage());
+            }
             return;
         }
         setBusy(true, "Planning...");
@@ -396,13 +428,27 @@ final class MainFrame extends JFrame {
                 try {
                     MissionPlan plan = get();
                     setBusy(false, " ");
-                    approve(current.control(), plan);
+                    if (out == null) {
+                        approve(current.control(), plan);
+                    } else {
+                        pendingPlan = plan;
+                        pendingControl = current.control();
+                        for (String line : plan.describe().split("\\R")) {
+                            out.line(line);
+                        }
+                        out.line("Type launch to start the mission, or cancel to drop the plan.");
+                        refreshIncidents();
+                    }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     setBusy(false, " ");
                 } catch (ExecutionException e) {
                     setBusy(false, " ");
-                    showError("No plan could be made", e.getCause());
+                    if (out == null) {
+                        showError("No plan could be made", e.getCause());
+                    } else {
+                        out.error("No plan could be made: " + e.getCause().getMessage());
+                    }
                     refreshIncidents();
                 }
             }
@@ -441,6 +487,139 @@ final class MainFrame extends JFrame {
             rig.control().abort(m, "stopped by the operator");
             appendLog("Aborting: " + selected.title());
         });
+    }
+
+    // ---- actions for the console commands -------------------------------------------------------
+
+    void consolePlan(Incident incident, WindowCommands.Output out) {
+        if (busy) {
+            out.error("The window is busy; try again when it has finished.");
+        } else if (pendingPlan != null) {
+            out.error("A plan is already waiting: type launch or cancel first.");
+        } else {
+            incidentList.select(incident);
+            out.line("Planning #" + incident.id().map(String::valueOf).orElse("?") + " " + incident.title() + "...");
+            planIncident(incident, out);
+        }
+    }
+
+    void consoleLaunch(WindowCommands.Output out) {
+        if (pendingPlan == null) {
+            out.error("There is no plan waiting. Use: plan <id>");
+            return;
+        }
+        MissionPlan plan = pendingPlan;
+        MissionControl control = pendingControl;
+        pendingPlan = null;
+        pendingControl = null;
+        try {
+            Mission mission = control.launch(plan);
+            out.line("Launched: " + plan.incident().title() + " with " + mission.helicopters().size() + " helicopter(s).");
+            map.fit(plan.incident(), plan.depot());
+        } catch (RuntimeException e) {
+            try {
+                control.cancelPlan(plan);
+            } catch (RuntimeException ignored) {
+                // the incident was not PLANNED any more; nothing to undo
+            }
+            out.error("Could not launch: " + e.getMessage());
+        }
+        refreshIncidents();
+    }
+
+    void consoleCancel(WindowCommands.Output out) {
+        if (pendingPlan == null) {
+            out.error("There is no plan waiting.");
+            return;
+        }
+        MissionPlan plan = pendingPlan;
+        MissionControl control = pendingControl;
+        pendingPlan = null;
+        pendingControl = null;
+        try {
+            control.cancelPlan(plan);
+        } catch (RuntimeException ignored) {
+            // the incident was not PLANNED any more; nothing to undo
+        }
+        out.line("Plan cancelled for " + plan.incident().title() + ".");
+        refreshIncidents();
+    }
+
+    void consoleAbort(Incident incident, WindowCommands.Output out) {
+        Optional<Mission> mission = rig == null
+                ? Optional.empty() : rig.control().missionFor(incident).filter(m -> !m.isFinished());
+        if (mission.isEmpty()) {
+            out.error("#" + incident.id().map(String::valueOf).orElse("?") + " has no running mission.");
+            return;
+        }
+        rig.control().abort(mission.get(), "stopped by the operator");
+        out.line("Aborting: " + incident.title());
+    }
+
+    void consoleAbortAll(WindowCommands.Output out) {
+        if (rig == null || rig.control().activeMissions().isEmpty()) {
+            out.error("No mission is running.");
+            return;
+        }
+        rig.control().abortAll("stopped by the operator");
+        out.line("All missions are being aborted.");
+    }
+
+    void consoleSetFleet(int r, int d, int h, WindowCommands.Output out) {
+        if (missionRunning() || pendingPlan != null) {
+            out.error("The fleet cannot change while a mission runs or a plan is waiting.");
+            return;
+        }
+        FleetLayout layout;
+        try {
+            layout = new FleetLayout(r, d, h);
+        } catch (IllegalArgumentException e) {
+            out.error(e.getMessage());
+            return;
+        }
+        rovers.setValue(layout.rovers());
+        drones.setValue(layout.dronesPerRover());
+        helicopters.setValue(layout.helicopters());
+        resetFleet();
+        out.line("Fleet set to " + layout.rovers() + " rover(s) with " + layout.dronesPerRover()
+                + " drone(s) each and " + layout.helicopters() + " helicopter(s).");
+    }
+
+    String fleetSummary() {
+        String configured = String.format(Locale.ROOT, "Fleet settings: %d rover(s) with %d drone(s) each, %d helicopter(s).",
+                (Integer) rovers.getValue(), (Integer) drones.getValue(), (Integer) helicopters.getValue());
+        return configured + (rig == null
+                ? " No fleet is on the map yet; one is placed when you plan an incident."
+                : String.format(Locale.ROOT, " The fleet is based at %.3f, %.3f.", rig.depot().lat(), rig.depot().lon()));
+    }
+
+    void focusOn(Incident incident) {
+        incidentList.select(incident);
+        map.fit(List.of(incident));
+    }
+
+    void focusAll() {
+        map.fit(incidentList.all());
+    }
+
+    List<Integer> speeds() {
+        return List.of(SPEEDS);
+    }
+
+    int speed() {
+        return (Integer) speed.getSelectedItem();
+    }
+
+    void setSpeed(int perSecond) {
+        speed.setSelectedItem(perSecond);
+    }
+
+    Workspace workspace() {
+        return workspace;
+    }
+
+    private boolean missionRunning() {
+        return rig != null && !rig.control().activeMissions().isEmpty();
     }
 
     private void clearFinished() {
@@ -538,6 +717,14 @@ final class MainFrame extends JFrame {
     private void shutdown() {
         timer.stop();
         workspace.savePreferences();
+        if (pendingPlan != null) {
+            try {
+                pendingControl.cancelPlan(pendingPlan);
+            } catch (RuntimeException ignored) {
+                // the incident was not PLANNED any more
+            }
+            pendingPlan = null;
+        }
         if (rig != null) {
             rig.control().abortAll("the window was closed");
             rig.control().runUntilSettled(MAX_TICKS_PER_FRAME * 100);
@@ -561,7 +748,21 @@ final class MainFrame extends JFrame {
 
         @Override
         public boolean missionRunning() {
-            return rig != null && !rig.control().activeMissions().isEmpty();
+            return MainFrame.this.missionRunning() || pendingPlan != null;
+        }
+
+        @Override
+        public boolean windowCommand(String name, List<String> args, WindowCommands.Output out) {
+            if (!WindowCommands.handles(name)) {
+                return false;
+            }
+            windowCommands.run(name, args, out);
+            return true;
+        }
+
+        @Override
+        public List<String> windowArguments(String command) {
+            return WindowCommands.arguments(command, incidentList.all(), speeds());
         }
 
         @Override

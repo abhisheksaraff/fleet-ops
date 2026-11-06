@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import picocli.CommandLine;
 
@@ -22,11 +23,14 @@ final class ConsoleCompleter {
     private final CommandLine cli;
     private final List<String> builtIns;
     private final Supplier<List<Long>> incidentIds;
+    private final Function<String, List<String>> windowArguments;
 
-    ConsoleCompleter(CommandLine cli, List<String> builtIns, Supplier<List<Long>> incidentIds) {
+    ConsoleCompleter(CommandLine cli, List<String> builtIns, Supplier<List<Long>> incidentIds,
+            Function<String, List<String>> windowArguments) {
         this.cli = cli;
         this.builtIns = builtIns;
         this.incidentIds = incidentIds;
+        this.windowArguments = windowArguments;
     }
 
     Result complete(String line) {
@@ -47,6 +51,10 @@ final class ConsoleCompleter {
             CommandLine sub = cli.getSubcommands().get(command);
             if (previous.equals("-t") || previous.equals("--topic")) {
                 pool.addAll(TOPICS);
+            } else if (sub == null && WindowCommands.handles(command)) {
+                if (index == 1) {
+                    pool.addAll(windowArguments.apply(command));
+                }
             } else if (sub != null) {
                 boolean takesId = command.equals("show") || command.equals("run");
                 if (takesId && index == 1 && !current.startsWith("-")) {

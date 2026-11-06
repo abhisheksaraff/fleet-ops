@@ -40,6 +40,8 @@ final class MissionCard extends JPanel {
 
     private final transient Runnable onPlan;
     private final transient Runnable onAbort;
+    private final transient Runnable onLaunch;
+    private final transient Runnable onCancel;
 
     private final Badge badge = new Badge();
     private final Wrapped title = new Wrapped(236, 3);
@@ -56,6 +58,8 @@ final class MissionCard extends JPanel {
     private final JLabel progressUnits = new JLabel();
     private final JButton planButton = new JButton("Plan rescue");
     private final JButton abortButton = new JButton("Abort mission");
+    private final JButton launchButton = new JButton("Launch");
+    private final JButton cancelButton = new JButton("Cancel plan");
     private final JPanel buttons = new JPanel(new GridLayout(1, 0, 8, 0));
 
     private transient Incident shownIncident;
@@ -64,9 +68,11 @@ final class MissionCard extends JPanel {
     private String shownButtons = "";
     private boolean relayout;
 
-    MissionCard(Runnable onPlan, Runnable onAbort) {
+    MissionCard(Runnable onPlan, Runnable onAbort, Runnable onLaunch, Runnable onCancel) {
         this.onPlan = onPlan;
         this.onAbort = onAbort;
+        this.onLaunch = onLaunch;
+        this.onCancel = onCancel;
         setOpaque(false);
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
         setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
@@ -126,6 +132,10 @@ final class MissionCard extends JPanel {
         buttons.setOpaque(false);
         Ui.primary(planButton);
         Ui.danger(abortButton);
+        Ui.primary(launchButton);
+        Ui.secondary(cancelButton);
+        launchButton.addActionListener(e -> this.onLaunch.run());
+        cancelButton.addActionListener(e -> this.onCancel.run());
         planButton.addActionListener(e -> this.onPlan.run());
         abortButton.addActionListener(e -> this.onAbort.run());
 
@@ -176,8 +186,9 @@ final class MissionCard extends JPanel {
      * @param mission the mission for this incident, or {@code null}
      * @param nowSeconds the simulation clock, for the elapsed time of a running mission
      * @param busy true while a plan is being made, which disables the buttons
+     * @param pending true when a plan for this incident is waiting to be launched or cancelled
      */
-    void show(Incident incident, Mission mission, double nowSeconds, boolean busy) {
+    void show(Incident incident, Mission mission, double nowSeconds, boolean busy, boolean pending) {
         if (incident == null) {
             clear();
             return;
@@ -188,13 +199,19 @@ final class MissionCard extends JPanel {
         boolean running = mission != null && !mission.isFinished();
         planButton.setEnabled(!busy);
         abortButton.setEnabled(!busy && running);
+        launchButton.setEnabled(!busy);
+        cancelButton.setEnabled(!busy);
         boolean showPlan = incident.state() == IncidentState.VERIFIED;
-        String layout = showPlan + "|" + running;
+        String layout = showPlan + "|" + running + "|" + pending;
         if (!layout.equals(shownButtons)) {
             shownButtons = layout;
             buttons.removeAll();
             if (showPlan) {
                 buttons.add(planButton);
+            }
+            if (pending) {
+                buttons.add(launchButton);
+                buttons.add(cancelButton);
             }
             if (running) {
                 buttons.add(abortButton);
