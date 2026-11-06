@@ -36,9 +36,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
-import javax.swing.JTable;
 import javax.swing.JTextArea;
-import javax.swing.ListSelectionModel;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
@@ -67,8 +65,7 @@ final class MainFrame extends JFrame {
 
     private final transient AppContext app;
     private final transient Runnable onExit;
-    private final IncidentTableModel model = new IncidentTableModel();
-    private final JTable table = new JTable(model);
+    private final IncidentList incidentList = new IncidentList();
     private final MapPanel map;
     private final JTextArea details = new JTextArea(5, 30);
     private final JTextArea log = new JTextArea(7, 80);
@@ -90,7 +87,6 @@ final class MainFrame extends JFrame {
     private transient SimulationRig rig;
     private transient SimulationEngine engineForMap;
     private boolean busy;
-    private boolean selectingFromMap;
     private double tickBudget;
 
     MainFrame(AppContext app, Runnable onExit) {
@@ -101,8 +97,8 @@ final class MainFrame extends JFrame {
         if (!MapTiles.isKnown(app.config().mapTiles())) {
             appendLog("MAP_TILES='" + app.config().mapTiles() + "' is not supported; using OpenStreetMap.");
         }
-        map = new MapPanel(MapTiles.create(app.config().mapTiles()), model::incidents,
-                new MapOverlay(model::incidents, () -> engineForMap, this::selectedIncident));
+        map = new MapPanel(MapTiles.create(app.config().mapTiles()), incidentList::all,
+                new MapOverlay(incidentList::all, () -> engineForMap, this::selectedIncident));
         map.onSelect(this::selectFromMap);
         map.onActivate(incident -> {
             selectFromMap(incident);
@@ -134,26 +130,6 @@ final class MainFrame extends JFrame {
     // ---- layout ---------------------------------------------------------------------------------
 
     private void buildLayout() {
-        table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        table.setAutoCreateRowSorter(false);
-        table.setFillsViewportHeight(true);
-        table.setShowGrid(false);
-        table.getTableHeader().setReorderingAllowed(false);
-        table.getColumnModel().getColumn(0).setPreferredWidth(30);
-        table.getColumnModel().getColumn(1).setPreferredWidth(74);
-        table.getColumnModel().getColumn(2).setPreferredWidth(100);
-        table.getColumnModel().getColumn(3).setPreferredWidth(80);
-        table.getColumnModel().getColumn(4).setPreferredWidth(58);
-        table.getColumnModel().getColumn(5).setPreferredWidth(200);
-        javax.swing.table.DefaultTableCellRenderer left = new javax.swing.table.DefaultTableCellRenderer();
-        left.setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
-        left.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
-        for (int column = 0; column < table.getColumnCount(); column++) {
-            table.getColumnModel().getColumn(column).setCellRenderer(left);
-        }
-        ((javax.swing.table.DefaultTableCellRenderer) table.getTableHeader().getDefaultRenderer())
-                .setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
-
         details.setEditable(false);
         details.setLineWrap(true);
         details.setWrapStyleWord(true);
@@ -217,7 +193,7 @@ final class MainFrame extends JFrame {
 
         JScrollPane detailPane = new JScrollPane(details);
         detailPane.setBorder(BorderFactory.createLineBorder(Theme.BORDER));
-        detailPane.setPreferredSize(new Dimension(100, 104));
+        detailPane.setPreferredSize(new Dimension(100, 76));
         detailPane.setMinimumSize(new Dimension(0, 60));
 
         JPanel foot = new JPanel();
@@ -243,7 +219,7 @@ final class MainFrame extends JFrame {
         sidebar.setBackground(Theme.PANEL);
         sidebar.setBorder(BorderFactory.createEmptyBorder(14, 14, 14, 14));
         sidebar.add(head, BorderLayout.NORTH);
-        sidebar.add(Ui.scroll(table), BorderLayout.CENTER);
+        sidebar.add(incidentList, BorderLayout.CENTER);
         sidebar.add(foot, BorderLayout.SOUTH);
         sidebar.setMinimumSize(new Dimension(0, 0));
 
@@ -278,13 +254,9 @@ final class MainFrame extends JFrame {
     }
 
     private void wireActions() {
-        table.getSelectionModel().addListSelectionListener(e -> {
-            if (e.getValueIsAdjusting()) {
-                return;
-            }
-            Incident selected = selectedIncident();
+        incidentList.addSelectionListener((selected, byUser) -> {
             showDetails(selected);
-            if (selected != null && !selectingFromMap) {
+            if (selected != null && byUser) {
                 map.fit(List.of(selected));
             }
             map.repaint();
@@ -309,21 +281,11 @@ final class MainFrame extends JFrame {
     // ---- state shown on screen ------------------------------------------------------------------
 
     Incident selectedIncident() {
-        int row = table.getSelectedRow();
-        return row < 0 || row >= model.getRowCount() ? null : model.incidentAt(row);
+        return incidentList.selected();
     }
 
     private void selectFromMap(Incident incident) {
-        int row = model.rowOf(incident);
-        if (row < 0) {
-            return;
-        }
-        selectingFromMap = true;
-        try {
-            table.getSelectionModel().setSelectionInterval(row, row);
-        } finally {
-            selectingFromMap = false;
-        }
+        incidentList.select(incident);
     }
 
     private void showDetails(Incident i) {
@@ -341,22 +303,10 @@ final class MainFrame extends JFrame {
 
     /** Reloads the incident list from the store, keeping the selection. */
     void refreshIncidents() {
-        Incident keep = selectedIncident();
         List<Incident> shown = app.repository().findAll().stream()
                 .filter(i -> i.state() != IncidentState.REJECTED && i.state() != IncidentState.DUPLICATE)
                 .toList();
-        model.setIncidents(shown);
-        if (keep != null) {
-            int row = model.rowOf(keep);
-            if (row >= 0) {
-                selectingFromMap = true;
-                try {
-                    table.getSelectionModel().setSelectionInterval(row, row);
-                } finally {
-                    selectingFromMap = false;
-                }
-            }
-        }
+        incidentList.setIncidents(shown);
         map.repaint();
         updateButtons();
     }
@@ -365,7 +315,7 @@ final class MainFrame extends JFrame {
         Incident selected = selectedIncident();
         boolean active = rig != null && !rig.control().activeMissions().isEmpty();
         scanButton.setEnabled(!busy);
-        clearButton.setEnabled(!busy && !active && model.incidents().stream().anyMatch(i -> !i.isActive()));
+        clearButton.setEnabled(!busy && !active && incidentList.all().stream().anyMatch(i -> !i.isActive()));
         runButton.setEnabled(!busy && selected != null && selected.state() == IncidentState.VERIFIED);
         abortButton.setEnabled(!busy && selected != null && rig != null && rig.control().missionFor(selected).filter(m -> !m.isFinished()).isPresent());
         abortAllButton.setEnabled(!busy && active);
@@ -428,7 +378,7 @@ final class MainFrame extends JFrame {
                     report.sourceFailures().forEach((type, why) -> appendLog("  could not read " + type.keyword() + " news: " + why));
                     refreshIncidents();
                     if (!report.created().isEmpty()) {
-                        map.fit(model.incidents());
+                        map.fit(incidentList.all());
                     }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -527,7 +477,7 @@ final class MainFrame extends JFrame {
         if (busy || (rig != null && !rig.control().activeMissions().isEmpty())) {
             return;
         }
-        long count = model.incidents().stream().filter(i -> !i.isActive()).count();
+        long count = incidentList.all().stream().filter(i -> !i.isActive()).count();
         int choice = JOptionPane.showConfirmDialog(this, "Delete " + count + " finished incident(s) from the database?",
                 "Clear finished incidents", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
         if (choice != JOptionPane.OK_OPTION) {
@@ -633,12 +583,8 @@ final class MainFrame extends JFrame {
         return map;
     }
 
-    IncidentTableModel tableModel() {
-        return model;
-    }
-
-    JTable table() {
-        return table;
+    IncidentList incidentList() {
+        return incidentList;
     }
 
     SimulationRig rigOrNull() {

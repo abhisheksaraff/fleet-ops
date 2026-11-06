@@ -34,6 +34,33 @@ final class Icons {
         });
     }
 
+    /** A magnifying glass in the muted colour, for the search box. */
+    static Icon search() {
+        return new Icon() {
+            @Override
+            public void paintIcon(Component c, Graphics g, int x, int y) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.translate(x, y);
+                g2.setColor(Theme.MUTED);
+                g2.setStroke(new BasicStroke(1.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g2.draw(new java.awt.geom.Ellipse2D.Float(2, 2, 8.5f, 8.5f));
+                g2.drawLine(10, 10, 14, 14);
+                g2.dispose();
+            }
+
+            @Override
+            public int getIconWidth() {
+                return 16;
+            }
+
+            @Override
+            public int getIconHeight() {
+                return 16;
+            }
+        };
+    }
+
     private static Icon icon(BiConsumer<Graphics2D, Component> painter) {
         return new Icon() {
             @Override
