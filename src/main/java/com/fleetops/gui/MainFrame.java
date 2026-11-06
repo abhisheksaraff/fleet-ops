@@ -67,7 +67,7 @@ final class MainFrame extends JFrame {
     private final transient Runnable onExit;
     private final IncidentList incidentList = new IncidentList();
     private final MapPanel map;
-    private final JTextArea details = new JTextArea(5, 30);
+    private final MissionCard card = new MissionCard(this::planSelected, this::abortSelected);
     private final JTextArea log = new JTextArea(7, 80);
     private final JLabel status = new JLabel(" ");
     private Workspace workspace;
@@ -95,10 +95,11 @@ final class MainFrame extends JFrame {
         this.onExit = onExit;
 
         if (!MapTiles.isKnown(app.config().mapTiles())) {
-            appendLog("MAP_TILES='" + app.config().mapTiles() + "' is not supported; using OpenStreetMap.");
+            appendLog("MAP_TILES='" + app.config().mapTiles() + "' is not supported; using the dark map (use dark or osm).");
         }
-        map = new MapPanel(MapTiles.create(app.config().mapTiles()), incidentList::all,
+        map = new MapPanel(MapTiles.create(app.config().mapTiles()), MapTiles.attribution(app.config().mapTiles()), incidentList::all,
                 new MapOverlay(incidentList::all, () -> engineForMap, this::selectedIncident));
+        map.setCard(card);
         map.onSelect(this::selectFromMap);
         map.onActivate(incident -> {
             selectFromMap(incident);
@@ -130,12 +131,6 @@ final class MainFrame extends JFrame {
     // ---- layout ---------------------------------------------------------------------------------
 
     private void buildLayout() {
-        details.setEditable(false);
-        details.setLineWrap(true);
-        details.setWrapStyleWord(true);
-        details.setBackground(Theme.RAISED);
-        details.setForeground(Theme.TEXT);
-        details.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
         log.setEditable(false);
         log.setFont(Theme.mono(12f));
         log.setBackground(Theme.CONSOLE_BG);
@@ -191,18 +186,9 @@ final class MainFrame extends JFrame {
         speedRow.add(Ui.muted("x real time"));
         speedRow.add(resetButton);
 
-        JScrollPane detailPane = new JScrollPane(details);
-        detailPane.setBorder(BorderFactory.createLineBorder(Theme.BORDER));
-        detailPane.setPreferredSize(new Dimension(100, 76));
-        detailPane.setMinimumSize(new Dimension(0, 60));
-
         JPanel foot = new JPanel();
         foot.setOpaque(false);
         foot.setLayout(new BoxLayout(foot, BoxLayout.Y_AXIS));
-        foot.add(javax.swing.Box.createVerticalStrut(10));
-        foot.add(Ui.caption("Selected"));
-        foot.add(javax.swing.Box.createVerticalStrut(8));
-        foot.add(detailPane);
         foot.add(javax.swing.Box.createVerticalStrut(10));
         foot.add(missionRow);
         foot.add(javax.swing.Box.createVerticalStrut(14));
@@ -255,7 +241,6 @@ final class MainFrame extends JFrame {
 
     private void wireActions() {
         incidentList.addSelectionListener((selected, byUser) -> {
-            showDetails(selected);
             if (selected != null && byUser) {
                 map.fit(List.of(selected));
             }
@@ -288,19 +273,6 @@ final class MainFrame extends JFrame {
         incidentList.select(incident);
     }
 
-    private void showDetails(Incident i) {
-        if (i == null) {
-            details.setText("");
-            return;
-        }
-        details.setText(String.format(Locale.ROOT,
-                "#%s %s (%s, %s)%nAbout %d people in a %.1f km square at %.4f, %.4f%n%s",
-                i.id().map(String::valueOf).orElse("?"), i.title(), i.type().keyword(), i.severity(),
-                i.estimatedPeople(), i.area().sideKm(), i.area().center().lat(), i.area().center().lon(),
-                i.summary()));
-        details.setCaretPosition(0);
-    }
-
     /** Reloads the incident list from the store, keeping the selection. */
     void refreshIncidents() {
         List<Incident> shown = app.repository().findAll().stream()
@@ -323,6 +295,17 @@ final class MainFrame extends JFrame {
         rovers.setEnabled(!active);
         drones.setEnabled(!active);
         helicopters.setEnabled(!active);
+        refreshCard(selected);
+    }
+
+    /** Updates the floating card over the map for the selected incident. */
+    private void refreshCard(Incident selected) {
+        if (selected == null) {
+            card.clear();
+            return;
+        }
+        Mission mission = rig == null ? null : rig.control().missionFor(selected).orElse(null);
+        card.show(selected, mission, rig == null ? 0 : rig.engine().elapsedSeconds(), busy);
     }
 
     private void appendLog(String line) {
@@ -429,20 +412,9 @@ final class MainFrame extends JFrame {
     }
 
     private void approve(MissionControl control, MissionPlan plan) {
-        JTextArea text = new JTextArea(plan.describe(), 12, 64);
-        text.setEditable(false);
-        text.setLineWrap(true);
-        text.setWrapStyleWord(true);
-        text.setFont(Theme.mono(12f));
-        text.setBackground(Theme.CONSOLE_BG);
-        text.setBorder(BorderFactory.createEmptyBorder(10, 12, 10, 12));
-        JScrollPane planPane = new JScrollPane(text);
-        planPane.setBorder(BorderFactory.createLineBorder(Theme.BORDER));
-        planPane.setPreferredSize(new Dimension(620, 280));
-        int choice = JOptionPane.showOptionDialog(this, planPane, "Approve this mission?",
-                JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new Object[] {"Launch", "Cancel"}, "Launch");
+        boolean launch = PlanDialog.confirm(this, plan);
         try {
-            if (choice == 0) {
+            if (launch) {
                 Mission mission = control.launch(plan);
                 appendLog("Launched: " + plan.incident().title() + " with " + mission.helicopters().size() + " helicopter(s).");
                 map.fit(plan.incident(), plan.depot());
@@ -578,6 +550,10 @@ final class MainFrame extends JFrame {
     }
 
     // ---- hooks for tests ------------------------------------------------------------------------
+
+    MissionCard card() {
+        return card;
+    }
 
     MapPanel map() {
         return map;

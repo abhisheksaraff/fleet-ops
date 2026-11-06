@@ -6,7 +6,7 @@ import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 
 /**
- * Entry point of the Swing GUI: an OpenStreetMap view of incidents, fleet and survivors with the
+ * Entry point of the Swing GUI: a dark map view of incidents, fleet and survivors with the
  * controls to scan the news, plan a mission and watch it run.
  */
 public final class FleetOpsGui {

@@ -633,11 +633,13 @@ final class IncidentList extends JPanel {
                 g.draw(crack);
             }
             case FAMINE -> {
-                g.draw(new Arc2D.Float(-10, -7, 20, 20, 180, 180, Arc2D.OPEN));
-                g.drawLine(-10, 3, 10, 3);
-                g.drawLine(-4, 12, 4, 12);
-                g.drawLine(-3, -9, -3, -5);
-                g.drawLine(3, -9, 3, -5);
+                // an ear of wheat: a stem with three pairs of grains
+                g.drawLine(0, 12, 0, -8);
+                for (int y = -4; y <= 6; y += 5) {
+                    g.drawLine(0, y, -6, y - 5);
+                    g.drawLine(0, y, 6, y - 5);
+                }
+                g.fill(new Ellipse2D.Float(-2f, -12f, 4f, 6f));
             }
         }
         g.dispose();

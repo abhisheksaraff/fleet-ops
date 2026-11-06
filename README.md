@@ -52,7 +52,7 @@ Then edit `.env`. The default `LLM_PROVIDER=mock` needs no key and no network. T
 | `TELEGRAM_CHANNELS` | Public channel names, used when `telegram` is a source | none |
 | `NEWS_GOOGLE_EDITION` | Google News language and country | `hl=en-CA&gl=CA&ceid=CA:en` |
 | `NEWS_TOPICS` | `flood`, `famine`, `fire`, `earthquake` (blank = all) | all four |
-| `MAP_TILES` | Map tile source | `osm` |
+| `MAP_TILES` | Map tile source: `dark` (CARTO Dark Matter) or `osm` (OpenStreetMap) | `dark` |
 
 ## Run
 
@@ -88,7 +88,7 @@ run 1 --progress
 
 ### Graphical interface
 
-`mvn -q exec:java` opens the map window (OpenStreetMap tiles, so it needs internet access to show the map).
+`mvn -q exec:java` opens the map window (dark map tiles, so it needs internet access to show the map).
 
 1. **Scan news** reads the configured feeds, has the AI verify them and adds incidents to the list and the map.
 2. Click an incident square on the map (or a row in the list) to select it. Double-click a square, or press **Plan mission...**, to have the AI plan the response.
@@ -109,7 +109,7 @@ swapped through configuration:
 | AI vendor | `LLM_PROVIDER` in `.env`; a new vendor is one class implementing `LlmClient` plus one line in `LlmClients` |
 | Database | `DB_URL` (and the driver dependency in `pom.xml`); the code only uses `java.sql` |
 | News feeds | `NEWS_SOURCES`; a new feed is one class implementing `NewsSource` |
-| Map tiles | `MapTiles` (only OpenStreetMap exists today) |
+| Map tiles | `MapTiles` (`dark` and `osm`) |
 
 Package overview (`src/main/java/com/fleetops/`):
 
@@ -132,7 +132,7 @@ The design patterns used, with the classes that implement them, are listed in
 
 - **"LLM_PROVIDER=gemini needs LLM_API_KEY"** - put your key in `.env`, or use `LLM_PROVIDER=mock`.
 - **Could not open the database** - run `mvn compile` once so Maven downloads the H2 driver, or set `DB_URL=memory`.
-- **The map is grey** - tiles come from OpenStreetMap and need internet access. Incidents and units are still drawn.
+- **The map is grey** - tiles come from CARTO / OpenStreetMap and need internet access. Incidents and units are still drawn.
 - **Plan fails with "no drone is ready"** - the units are busy or low on battery; press **Reset fleet** (GUI) or start a new `run` (CLI), which begins with a fresh fleet.
 - **Start fresh** - run `reset` (CLI) or press **Clear finished** (GUI), or delete the `data/` folder (the local database, gitignored).
 - **An incident is stuck as IN_PROGRESS** (the program was killed mid-mission) - run `reset` to remove it.

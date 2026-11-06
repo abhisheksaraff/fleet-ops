@@ -1,0 +1,417 @@
+package com.fleetops.gui;
+
+import com.fleetops.domain.fleet.UnitState;
+import com.fleetops.domain.incident.Incident;
+import com.fleetops.domain.incident.IncidentState;
+import com.fleetops.mission.Mission;
+import com.fleetops.mission.MissionReport;
+import com.fleetops.sim.IncidentZone;
+import java.awt.BasicStroke;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.GridLayout;
+import java.awt.RenderingHints;
+import java.awt.event.MouseAdapter;
+import java.awt.geom.RoundRectangle2D;
+import java.util.Locale;
+import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.JButton;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+
+/**
+ * The card that floats over the map. It describes the selected incident; once a mission exists for it
+ * the card also shows live progress (people rescued, found and still hidden, elapsed time, units at
+ * work) or, when the mission is over, how it ended.
+ */
+final class MissionCard extends JPanel {
+
+    private static final long serialVersionUID = 1L;
+    private static final int WIDTH = 340;
+
+    private final transient Runnable onPlan;
+    private final transient Runnable onAbort;
+
+    private final Badge badge = new Badge();
+    private final Wrapped title = new Wrapped(236, 3);
+    private final JLabel kind = new JLabel();
+    private final Chip severityChip = new Chip();
+    private final Chip stateChip = new Chip();
+    private final JLabel facts = new JLabel();
+    private final Wrapped summary = new Wrapped(308, 5);
+    private final JPanel progressBox = new JPanel();
+    private final JLabel progressCaption = Ui.caption("Mission");
+    private final Bar bar = new Bar();
+    private final JLabel progressMain = new JLabel();
+    private final JLabel progressSub = new JLabel();
+    private final JLabel progressUnits = new JLabel();
+    private final JButton planButton = new JButton("Plan rescue");
+    private final JButton abortButton = new JButton("Abort mission");
+    private final JPanel buttons = new JPanel(new GridLayout(1, 0, 8, 0));
+
+    private transient Incident shownIncident;
+    private transient IncidentState shownState;
+    private String lastProgress = "";
+    private String shownButtons = "";
+    private boolean relayout;
+
+    MissionCard(Runnable onPlan, Runnable onAbort) {
+        this.onPlan = onPlan;
+        this.onAbort = onAbort;
+        setOpaque(false);
+        setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+        setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
+        // The card swallows mouse input so a drag on it does not pan the map underneath.
+        addMouseListener(new MouseAdapter() { });
+        addMouseMotionListener(new MouseAdapter() { });
+        addMouseWheelListener(e -> { });
+
+        title.setFont(Theme.ui(Font.BOLD, 15f));
+        title.setForeground(Theme.TEXT);
+        kind.setFont(Theme.ui(Font.PLAIN, 12f));
+        kind.setForeground(Theme.MUTED);
+        facts.setFont(Theme.ui(Font.PLAIN, 12f));
+        facts.setForeground(Theme.MUTED);
+        summary.setFont(Theme.ui(Font.PLAIN, 12f));
+        summary.setForeground(new Color(0xB4BAC2));
+        progressMain.setFont(Theme.ui(Font.BOLD, 22f));
+        progressMain.setForeground(Theme.TEXT);
+        progressSub.setFont(Theme.ui(Font.PLAIN, 12f));
+        progressSub.setForeground(Theme.MUTED);
+        progressUnits.setFont(Theme.ui(Font.PLAIN, 12f));
+        progressUnits.setForeground(Theme.MUTED);
+
+        JPanel heading = new JPanel(new BorderLayout(12, 0));
+        heading.setOpaque(false);
+        heading.add(badge, BorderLayout.WEST);
+        JPanel names = new JPanel();
+        names.setOpaque(false);
+        names.setLayout(new BoxLayout(names, BoxLayout.Y_AXIS));
+        names.add(title);
+        names.add(Box.createVerticalStrut(3));
+        names.add(kind);
+        title.setAlignmentX(0f);
+        kind.setAlignmentX(0f);
+        heading.add(names, BorderLayout.CENTER);
+
+        JPanel chips = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        chips.setOpaque(false);
+        chips.add(severityChip);
+        chips.add(stateChip);
+
+        progressBox.setOpaque(false);
+        progressBox.setLayout(new BoxLayout(progressBox, BoxLayout.Y_AXIS));
+        progressBox.add(progressCaption);
+        progressBox.add(Box.createVerticalStrut(4));
+        progressBox.add(progressMain);
+        progressBox.add(Box.createVerticalStrut(6));
+        progressBox.add(bar);
+        progressBox.add(Box.createVerticalStrut(8));
+        progressBox.add(progressSub);
+        progressBox.add(Box.createVerticalStrut(2));
+        progressBox.add(progressUnits);
+        for (java.awt.Component c : progressBox.getComponents()) {
+            ((JComponent) c).setAlignmentX(0f);
+        }
+
+        buttons.setOpaque(false);
+        Ui.primary(planButton);
+        Ui.danger(abortButton);
+        planButton.addActionListener(e -> this.onPlan.run());
+        abortButton.addActionListener(e -> this.onAbort.run());
+
+        add(heading);
+        add(Box.createVerticalStrut(12));
+        add(chips);
+        add(Box.createVerticalStrut(12));
+        add(facts);
+        add(Box.createVerticalStrut(8));
+        add(summary);
+        add(Box.createVerticalStrut(14));
+        add(progressBox);
+        add(Box.createVerticalStrut(14));
+        add(buttons);
+        for (java.awt.Component c : getComponents()) {
+            if (c instanceof JComponent jc) {
+                jc.setAlignmentX(0f);
+            }
+        }
+        setVisible(false);
+    }
+
+    @Override
+    public Dimension getPreferredSize() {
+        return new Dimension(WIDTH, super.getPreferredSize().height);
+    }
+
+    @Override
+    public Dimension getMaximumSize() {
+        return getPreferredSize();
+    }
+
+    // ---- content --------------------------------------------------------------------------------
+
+    /** Hides the card (nothing is selected). */
+    void clear() {
+        shownIncident = null;
+        shownState = null;
+        lastProgress = "";
+        shownButtons = "";
+        setVisible(false);
+    }
+
+    /**
+     * Shows an incident. Static text is rebuilt only when the incident or its state changes; the
+     * progress numbers are refreshed on every call, so this is cheap to call from the clock.
+     *
+     * @param mission the mission for this incident, or {@code null}
+     * @param nowSeconds the simulation clock, for the elapsed time of a running mission
+     * @param busy true while a plan is being made, which disables the buttons
+     */
+    void show(Incident incident, Mission mission, double nowSeconds, boolean busy) {
+        if (incident == null) {
+            clear();
+            return;
+        }
+        if (incident != shownIncident || incident.state() != shownState) {
+            rebuild(incident);
+        }
+        boolean running = mission != null && !mission.isFinished();
+        planButton.setEnabled(!busy);
+        abortButton.setEnabled(!busy && running);
+        boolean showPlan = incident.state() == IncidentState.VERIFIED;
+        String layout = showPlan + "|" + running;
+        if (!layout.equals(shownButtons)) {
+            shownButtons = layout;
+            buttons.removeAll();
+            if (showPlan) {
+                buttons.add(planButton);
+            }
+            if (running) {
+                buttons.add(abortButton);
+            }
+            buttons.setVisible(buttons.getComponentCount() > 0);
+            relayout = true;
+        }
+        updateProgress(mission, nowSeconds);
+        if (!isVisible()) {
+            setVisible(true);
+            relayout = true;
+        }
+        if (relayout) {
+            relayout = false;
+            revalidate();
+            repaint();
+        }
+    }
+
+    private void rebuild(Incident incident) {
+        shownIncident = incident;
+        shownState = incident.state();
+        badge.type = incident.type();
+        title.setText(incident.title());
+        kind.setText(titleCase(incident.type().keyword()) + " · #" + incident.id().map(String::valueOf).orElse("?"));
+        severityChip.set(incident.severity().name(), IncidentList.severityColor(incident.severity()));
+        stateChip.set(IncidentList.stateChip(incident.state())[0], IncidentList.stateColor(incident.state()));
+        facts.setText(String.format(Locale.ROOT, "About %d people · %.1f km square · %.3f, %.3f",
+                incident.estimatedPeople(), incident.area().sideKm(),
+                incident.area().center().lat(), incident.area().center().lon()));
+        String text = incident.summary() == null ? "" : incident.summary().strip();
+        summary.setText(text);
+        summary.setVisible(!text.isEmpty());
+        badge.repaint();
+        lastProgress = "";
+        relayout = true;
+    }
+
+    private void updateProgress(Mission mission, double nowSeconds) {
+        if (mission == null) {
+            if (progressBox.isVisible()) {
+                progressBox.setVisible(false);
+                relayout = true;
+            }
+            lastProgress = "";
+            return;
+        }
+        IncidentZone zone = mission.zone();
+        int total = zone.totalCount();
+        int rescued = zone.rescuedCount();
+        int found = zone.foundCount();
+        int hidden = zone.hiddenCount();
+        String main;
+        String sub;
+        String units;
+        Color accent;
+        if (mission.isFinished()) {
+            MissionReport report = mission.report().orElse(null);
+            accent = switch (mission.status()) {
+                case COMPLETED -> Theme.ACCENT;
+                case INCOMPLETE -> Theme.WARN;
+                default -> Theme.DANGER;
+            };
+            progressCaption.setText("MISSION " + mission.status());
+            main = rescued + " / " + total + " rescued";
+            sub = report == null ? "" : String.format(Locale.ROOT, "%.1f min simulated · %d never found",
+                    report.seconds() / 60.0, report.notFound());
+            units = "";
+        } else {
+            accent = Theme.ACCENT;
+            progressCaption.setText("MISSION RUNNING");
+            main = rescued + " / " + total + " rescued";
+            double minutes = Math.max(0, nowSeconds - mission.startedAtSeconds()) / 60.0;
+            sub = String.format(Locale.ROOT, "%d found · %d still hidden · %.1f min", found, hidden, minutes);
+            long searching = mission.plan().drones().stream()
+                    .filter(d -> d.state() == UnitState.OPERATING || d.state() == UnitState.EN_ROUTE).count();
+            long flying = mission.helicopters().stream().filter(h -> h.state() != UnitState.IDLE).count();
+            units = searching + " of " + mission.plan().drones().size() + " drones searching · "
+                    + flying + " of " + mission.helicopters().size() + " helicopters flying";
+        }
+        String signature = main + "|" + sub + "|" + units + "|" + accent.getRGB() + "|" + progressCaption.getText();
+        if (!signature.equals(lastProgress)) {
+            lastProgress = signature;
+            progressMain.setText(main);
+            progressSub.setText(sub);
+            progressUnits.setText(units);
+            progressUnits.setVisible(!units.isEmpty());
+            progressCaption.setForeground(accent);
+        }
+        bar.set(total == 0 ? 0 : rescued / (double) total, total == 0 ? 0 : (rescued + found) / (double) total, accent);
+        if (!progressBox.isVisible()) {
+            progressBox.setVisible(true);
+            relayout = true;
+        }
+    }
+
+    /** The text under the progress number, for tests. */
+    String progressSummary() {
+        return progressMain.isVisible() && progressBox.isVisible() ? progressMain.getText() : "";
+    }
+
+    String shownTitle() {
+        return shownIncident == null ? "" : shownIncident.title();
+    }
+
+    private static String titleCase(String word) {
+        return word.isEmpty() ? word : Character.toUpperCase(word.charAt(0)) + word.substring(1);
+    }
+
+    @Override
+    protected void paintComponent(Graphics g) {
+        Graphics2D g2 = (Graphics2D) g.create();
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+        RoundRectangle2D shape = new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), 24, 24);
+        g2.setColor(new Color(0x15, 0x18, 0x1C, 244));
+        g2.fill(shape);
+        g2.setColor(Theme.BORDER);
+        g2.setStroke(new BasicStroke(1f));
+        g2.draw(new RoundRectangle2D.Float(0.5f, 0.5f, getWidth() - 1, getHeight() - 1, 24, 24));
+        g2.dispose();
+        super.paintComponent(g);
+    }
+
+    // ---- small parts ----------------------------------------------------------------------------
+
+    /** The round disaster icon next to the title. */
+    private static final class Badge extends JComponent {
+        private static final long serialVersionUID = 1L;
+        private transient com.fleetops.domain.incident.IncidentType type = com.fleetops.domain.incident.IncidentType.FLOOD;
+
+        @Override
+        public Dimension getPreferredSize() {
+            return new Dimension(44, 44);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            IncidentList.paintTypeIcon(g2, type, 22, 22, 22, IncidentList.typeColor(type));
+            g2.dispose();
+        }
+    }
+
+    /** A small rounded label: severity or state. */
+    private static final class Chip extends JComponent {
+        private static final long serialVersionUID = 1L;
+        private String text = "";
+        private Color color = Theme.MUTED;
+
+        void set(String label, Color accent) {
+            text = label.toUpperCase(Locale.ROOT).replace('_', ' ');
+            color = accent;
+            revalidate();
+            repaint();
+        }
+
+        @Override
+        public Dimension getPreferredSize() {
+            FontMetrics fm = getFontMetrics(Theme.ui(Font.BOLD, 10f));
+            return new Dimension(fm.stringWidth(text) + 20, 20);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            g2.setColor(Ui.alpha(color, 40));
+            g2.fill(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), getHeight(), getHeight()));
+            g2.setColor(color);
+            g2.setFont(Theme.ui(Font.BOLD, 10f));
+            FontMetrics fm = g2.getFontMetrics();
+            g2.drawString(text, 10, (getHeight() + fm.getAscent() - fm.getDescent()) / 2);
+            g2.dispose();
+        }
+    }
+
+    /** A thin progress bar: solid for rescued, faint for found-so-far. */
+    private static final class Bar extends JComponent {
+        private static final long serialVersionUID = 1L;
+        private double rescued;
+        private double found;
+        private Color color = Theme.ACCENT;
+
+        void set(double rescuedShare, double foundShare, Color accent) {
+            if (rescued != rescuedShare || found != foundShare || !color.equals(accent)) {
+                rescued = rescuedShare;
+                found = foundShare;
+                color = accent;
+                repaint();
+            }
+        }
+
+        @Override
+        public Dimension getPreferredSize() {
+            return new Dimension(100, 8);
+        }
+
+        @Override
+        public Dimension getMaximumSize() {
+            return new Dimension(Integer.MAX_VALUE, 8);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            int w = getWidth();
+            int h = getHeight();
+            g2.setColor(Theme.RAISED);
+            g2.fill(new RoundRectangle2D.Float(0, 0, w, h, h, h));
+            g2.setColor(Ui.alpha(color, 70));
+            g2.fill(new RoundRectangle2D.Float(0, 0, (float) (w * Math.min(1, found)), h, h, h));
+            g2.setColor(color);
+            g2.fill(new RoundRectangle2D.Float(0, 0, (float) (w * Math.min(1, rescued)), h, h, h));
+            g2.dispose();
+        }
+    }
+}

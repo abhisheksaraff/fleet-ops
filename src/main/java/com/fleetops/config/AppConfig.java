@@ -39,7 +39,7 @@ public final class AppConfig {
 
     public static final String DEFAULT_LLM_BASE_URL = "http://localhost:11434";
     public static final String DEFAULT_DB_URL = "jdbc:h2:./data/fleetops";
-    public static final String DEFAULT_MAP_TILES = "osm";
+    public static final String DEFAULT_MAP_TILES = "dark";
     /** The built-in H2 user; embedded H2 creates the database for whoever connects first. */
     public static final String DEFAULT_DB_USER = "sa";
     /** A {@code DB_URL} of {@code memory} keeps incidents in memory only (nothing is saved). */
