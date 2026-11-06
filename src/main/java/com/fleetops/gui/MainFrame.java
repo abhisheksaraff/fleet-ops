@@ -67,6 +67,8 @@ final class MainFrame extends JFrame {
     private final transient Runnable onExit;
     private final IncidentList incidentList = new IncidentList();
     private final MapPanel map;
+    private final transient MapOverlay overlay;
+    private int frame;
     private final MissionCard card = new MissionCard(this::planSelected, this::abortSelected);
     private final JTextArea log = new JTextArea(7, 80);
     private final JLabel status = new JLabel(" ");
@@ -97,8 +99,10 @@ final class MainFrame extends JFrame {
         if (!MapTiles.isKnown(app.config().mapTiles())) {
             appendLog("MAP_TILES='" + app.config().mapTiles() + "' is not supported; using the dark map (use dark or osm).");
         }
-        map = new MapPanel(MapTiles.create(app.config().mapTiles()), MapTiles.attribution(app.config().mapTiles()), incidentList::all,
-                new MapOverlay(incidentList::all, () -> engineForMap, this::selectedIncident));
+        overlay = new MapOverlay(incidentList::all, () -> engineForMap, this::selectedIncident,
+                () -> rig == null ? List.of() : rig.control().activeMissions());
+        map = new MapPanel(MapTiles.create(app.config().mapTiles()), MapTiles.attribution(app.config().mapTiles()),
+                incidentList::all, overlay);
         map.setCard(card);
         map.onSelect(this::selectFromMap);
         map.onActivate(incident -> {
@@ -338,6 +342,9 @@ final class MainFrame extends JFrame {
         } else {
             tickBudget = 0;
         }
+        if (!active && overlay.animating() && ++frame % 2 == 0) {
+            map.repaint(); // rotors and waiting survivors keep moving between missions
+        }
         status.setText(String.format(Locale.ROOT, "Active missions: %d    Simulated time: %.1f min",
                 control.activeMissions().size(), rig.engine().elapsedSeconds() / 60.0));
         updateButtons();
@@ -550,6 +557,10 @@ final class MainFrame extends JFrame {
     }
 
     // ---- hooks for tests ------------------------------------------------------------------------
+
+    MapOverlay overlay() {
+        return overlay;
+    }
 
     MissionCard card() {
         return card;
