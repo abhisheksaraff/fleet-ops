@@ -14,13 +14,19 @@ FleetOps is a playful simulation: it is meant to show software-design patterns w
 2. **Verify** - the AI reads each item, decides whether it is a real incident and extracts structured
    data (place, latitude/longitude, severity, people affected). The answer is validated before use.
    Duplicates are detected, and incidents are saved without repeats.
-3. **Plan** - the AI chooses how many drones, which search pattern and how many helicopters to send,
-   based on severity and the units that are ready. If the AI is unavailable or answers badly, fixed
-   rules take over.
+3. **Plan** - the AI chooses how many drones, which search pattern, how many robodogs and how many
+   helicopters to send, based on severity and the units that are ready. If the AI is unavailable or
+   answers badly, fixed rules take over. **You can change the plan before approving it** (see below);
+   it is checked again against batteries and range after every change.
 4. **Safety check** - every command is checked by a deterministic safety gate (battery reserve,
    service area, unit readiness) before it runs. The AI cannot bypass it.
 5. **Simulate** - a rover drives to the south edge of the incident square, drones sweep the square
-   and reveal people, helicopters pick them up. The incident is marked completed when everyone is rescued.
+   and reveal people, robodogs are dropped off and walk circles around their drop-off points to find
+   people close to the ground, helicopters pick them up. The incident is marked completed when
+   everyone is rescued.
+6. **Debrief** - when a mission ends, the AI writes a short debrief: a summary, what went well,
+   what went wrong and what to do next time. It only sees the program's own numbers, never the news
+   text, and if the AI is unavailable fixed rules write the debrief instead.
 
 The program works with no key and no network: the defaults use a mock AI and demo news.
 
@@ -73,10 +79,16 @@ Every command is run as `mvn -q exec:java -Dexec.mainClass=com.fleetops.cli.Flee
 | `scan [-t flood,fire] [-v]` | Read one new news item per topic, have the AI verify it, store new incidents |
 | `incidents [-a] [-s STATE] [-t TYPE]` | List incidents (active ones unless `-a` or `-s`) |
 | `show <id>` | Details of one incident |
-| `run <id> [--dry-run] [-y] [--progress] [--abort-after S]` | AI plans the response, you approve it, the simulation plays out and prints a report |
+| `run <id> [--dry-run] [-y] [--progress] [--abort-after S] [--no-debrief]` | AI plans the response, you approve it, the simulation plays out and prints a report and a debrief |
 | `reset [-f] [-y]` | Delete stored incidents (`-f`: only finished ones), after confirmation |
 
-`run` also takes `--rovers`, `--drones`, `--helicopters`, `--depot-km`, `--seed` and `--max-ticks`.
+`run` also takes `--rovers`, `--drones`, `--robodogs`, `--helicopters`, `--depot-km`, `--seed` and
+`--max-ticks`; these set the size of the fleet (drones and robodogs are per rover).
+
+**Changing the plan.** Before it asks for approval, `run` can change what the AI chose:
+`--send-drones N`, `--send-robodogs N` (0 for none), `--send-helicopters N` and `--pattern lawnmower|spiral`.
+The changed plan is compiled and checked again, and refused with a reason if the batteries or the
+rover's range cannot cover it. The plan text then says what the operator changed.
 Exit codes: 0 ok, 1 configuration error, 2 bad usage, 3 incident not found, 4 failed or not completed.
 
 Example session with the offline demo news:
@@ -85,6 +97,7 @@ Example session with the offline demo news:
 scan
 incidents
 run 1 --progress
+run 2 --send-drones 3 --send-robodogs 1 --pattern spiral --dry-run
 ```
 
 ### Graphical interface
@@ -96,19 +109,23 @@ run 1 --progress
 **Working with incidents.**
 1. **Scan news** (or `scan` in the console) reads the configured feeds, has the AI verify them and adds incidents to the sidebar cards and the map.
 2. Click a card or a map marker to select it. A floating card on the map shows the incident and its mission.
-3. Press **Plan rescue** on the card, read the plan and press **Launch**. The rover drives to the edge of the square, drones sweep it (found people appear as red dots) and helicopters carry them out (rescued people turn green).
-4. **Abort mission** stops a mission and brings the units home. In the sidebar, **Abort all**, **Reset fleet** and **Clear finished** manage the rest, and the speed box sets how fast simulated time runs.
+3. Press **Plan mission**, read the plan and press **Launch**. The rover drives to the edge of the square, drones sweep it (found people appear as red dots), robodogs walk circles around their drop-off points (shown as faint circles) and helicopters carry people out (rescued people turn green).
+4. The plan window has an **Adjust the plan** section: change the number of drones, the search pattern, the number of robodogs and the number of helicopters. The plan is worked out and checked again after each change; if it cannot be carried out the reason is shown and **Launch** stays disabled. **Back to original plan** restores the AI's choice.
+5. **Abort** stops a mission and brings the units home. In the sidebar, **Abort all**, **Reset fleet** and **Clear finished** manage the rest, and the speed box sets how fast simulated time runs. The **Fleet** row sets rovers, drones per rover, robodogs per rover, helicopters and the simulation speed.
+6. When a mission ends, its card on the map shows the AI's debrief (summary, what went well, problems, next time). The console command `debrief [id]` prints it again.
 
 **Console.** The panel at the bottom runs the same commands as the command line against the same database (`scan`, `incidents`, `show <id>`, `run <id>`, `reset`, `config`). Up/Down recalls history, Tab completes, Ctrl+L clears. These commands also drive the window:
 
 | Command | Effect |
 |---|---|
 | `plan <id>` | plan a verified incident and print the plan |
+| `edit [drones=N] [pattern=lawnmower\|spiral] [helicopters=N] [robodogs=N]` | change the plan that is waiting; `edit reset` goes back to the AI's plan |
 | `launch` / `cancel` | start or drop the plan that is waiting |
+| `debrief [id]` | show the debrief of a finished mission (default: the selected one) |
 | `abort [id\|all]` | stop one mission (default: the selected one) or all |
 | `focus <id\|all>` | select an incident and zoom the map to it |
 | `speed [n]` | show or set the simulation speed |
-| `fleet [r d h]` | show or set rovers, drones per rover and helicopters |
+| `fleet [r d h [dogs]]` | show or set rovers, drones per rover, helicopters and robodogs per rover |
 | `layout <map\|list\|control\|sidebar\|console>` | change the window layout |
 | `help`, `clear`, `exit` | list commands, clear the screen, hide the console |
 
@@ -132,12 +149,13 @@ Package overview (`src/main/java/com/fleetops/`):
 
 | Package | Role |
 |---|---|
-| `domain` | Incidents, survivors, geography and the fleet (rover, drones, helicopters) |
+| `domain` | Incidents, survivors, geography and the fleet (rover, drones, robodogs, helicopters) |
 | `sim` | Fixed-step simulation engine, world and survivor placement |
 | `command`, `strategy` | Mission commands with a per-unit command queue; search patterns |
 | `safety` | Rules and the policy that checks commands |
 | `news`, `ai`, `intel` | News sources, LLM clients, and the verify-and-store pipeline |
 | `plan`, `mission` | AI/rule-based planning, and `MissionControl` which runs missions |
+| `debrief` | AI-written mission debrief, with a rule-based fallback |
 | `repository` | In-memory and JDBC incident storage |
 | `app`, `config` | Configuration and the composition root |
 | `cli`, `gui` | The two user interfaces |
@@ -160,5 +178,6 @@ The design patterns used, with the classes that implement them, are listed in
 - There are no automated tests in this repository yet; the code was checked with throwaway test programs.
 - Live Gemini, Ollama, Google News and Telegram access depends on your keys, network and the
   services' current behaviour; the offline demo mode is the dependable path.
-- The simulation is deliberately simple: straight-line flight, no wind or terrain, one search
-  pattern per mission.
+- The simulation is deliberately simple: straight-line flight and walking, no wind or terrain, one
+  search pattern per mission. Robodogs always walk circles from drop-off points along the south edge
+  of the square; the operator chooses how many, not where.
