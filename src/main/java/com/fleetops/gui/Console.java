@@ -309,6 +309,7 @@ final class Console extends JPanel {
             {"launch", "start the plan that is waiting"},
             {"cancel", "drop the plan that is waiting"},
             {"abort [id|all]", "stop a mission (default: the selected one)"},
+            {"debrief [id]", "show the AI debrief of a finished mission"},
             {"focus <id|all>", "select an incident and zoom the map to it"},
             {"speed [n]", "show or set how fast simulated time runs"},
             {"fleet [r d h]", "show or set rovers, drones per rover, helicopters"},

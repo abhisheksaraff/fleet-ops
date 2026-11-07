@@ -6,6 +6,11 @@ import com.fleetops.ai.LlmClients;
 import com.fleetops.config.AppConfig;
 import com.fleetops.config.ConfigException;
 import com.fleetops.config.NewsSourceType;
+import com.fleetops.debrief.LlmDebriefer;
+import com.fleetops.debrief.MissionDebriefer;
+import com.fleetops.debrief.MockDebriefing;
+import com.fleetops.debrief.PlainDebriefer;
+import com.fleetops.debrief.ResilientDebriefer;
 import com.fleetops.intel.IntelligenceService;
 import com.fleetops.intel.LlmNewsAnalyzer;
 import com.fleetops.intel.MockIntelligence;
@@ -59,6 +64,7 @@ public final class AppContext implements AutoCloseable {
     private NewsSource newsSource;
     private IntelligenceService intelligence;
     private ResponsePlanner planner;
+    private MissionDebriefer debriefer;
     private boolean keepOpen;
 
     private AppContext(AppConfig config, Clock clock) {
@@ -96,8 +102,10 @@ public final class AppContext implements AutoCloseable {
         if (llm == null) {
             MockIntelligence verification = new MockIntelligence();
             MockPlanning planning = new MockPlanning();
+            MockDebriefing debriefing = new MockDebriefing();
             llm = LlmClients.create(config, new JdkHttpPoster(),
-                    request -> MockPlanning.handles(request) ? planning.apply(request) : verification.apply(request));
+                    request -> MockPlanning.handles(request) ? planning.apply(request)
+                            : MockDebriefing.handles(request) ? debriefing.apply(request) : verification.apply(request));
         }
         return llm;
     }
@@ -142,6 +150,14 @@ public final class AppContext implements AutoCloseable {
             planner = new ResilientPlanner(new LlmResponsePlanner(llm()), new RuleBasedPlanner());
         }
         return planner;
+    }
+
+    /** The AI debriefer for finished missions, with the fixed rules as a fallback when the AI is unavailable or answers badly. */
+    public synchronized MissionDebriefer debriefer() {
+        if (debriefer == null) {
+            debriefer = new ResilientDebriefer(new LlmDebriefer(llm()), new PlainDebriefer());
+        }
+        return debriefer;
     }
 
     /**

@@ -9,8 +9,8 @@ import java.util.Optional;
 
 /**
  * The console commands that drive the window itself rather than the database: {@code plan},
- * {@code launch}, {@code cancel}, {@code abort}, {@code focus}, {@code speed}, {@code fleet} and
- * {@code layout}. This class only reads and checks what was typed; the window does the work.
+ * {@code launch}, {@code cancel}, {@code abort}, {@code debrief}, {@code focus}, {@code speed},
+ * {@code fleet} and {@code layout}. This class only reads and checks what was typed; the window does the work.
  */
 final class WindowCommands {
 
@@ -22,7 +22,7 @@ final class WindowCommands {
     }
 
     /** The names, in the order {@code help} lists them. */
-    static final List<String> NAMES = List.of("plan", "launch", "cancel", "abort", "focus", "speed", "fleet", "layout");
+    static final List<String> NAMES = List.of("plan", "launch", "cancel", "abort", "debrief", "focus", "speed", "fleet", "layout");
 
     private final MainFrame frame;
 
@@ -41,6 +41,7 @@ final class WindowCommands {
             case "launch" -> frame.consoleLaunch(out);
             case "cancel" -> frame.consoleCancel(out);
             case "abort" -> abort(args, out);
+            case "debrief" -> debrief(args, out);
             case "focus" -> focus(args, out);
             case "speed" -> speed(args, out);
             case "fleet" -> fleet(args, out);
@@ -84,6 +85,24 @@ final class WindowCommands {
             }
         }
         frame.consoleAbort(target, out);
+    }
+
+    private void debrief(List<String> args, Output out) {
+        Incident target;
+        if (args.size() > 1) {
+            Optional<Incident> incident = incidentFrom(args, 1, out, "debrief [id]");
+            if (incident.isEmpty()) {
+                return;
+            }
+            target = incident.get();
+        } else {
+            target = frame.selectedIncident();
+            if (target == null) {
+                out.error("Usage: debrief <id>  (or select an incident first)");
+                return;
+            }
+        }
+        frame.consoleDebrief(target, out);
     }
 
     // ---- the map and the clock ------------------------------------------------------------------
@@ -212,6 +231,7 @@ final class WindowCommands {
                 out.add("all");
                 yield out;
             }
+            case "debrief" -> ids(incidents, i -> true);
             case "focus" -> {
                 java.util.ArrayList<String> out = new java.util.ArrayList<>(ids(incidents, i -> true));
                 out.add("all");

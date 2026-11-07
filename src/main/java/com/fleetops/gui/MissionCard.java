@@ -1,5 +1,6 @@
 package com.fleetops.gui;
 
+import com.fleetops.debrief.Debrief;
 import com.fleetops.domain.fleet.UnitState;
 import com.fleetops.domain.incident.Incident;
 import com.fleetops.domain.incident.IncidentState;
@@ -30,7 +31,7 @@ import javax.swing.JPanel;
 /**
  * The card that floats over the map. It describes the selected incident; once a mission exists for it
  * the card also shows live progress (people rescued, found and still hidden, elapsed time, units at
- * work) or, when the mission is over, how it ended.
+ * work) or, when the mission is over, how it ended and, once it has been written, the debrief.
  */
 final class MissionCard extends JPanel {
 
@@ -50,6 +51,10 @@ final class MissionCard extends JPanel {
     private final JLabel facts = new JLabel();
     private final JLabel grid = Ui.readout(" ");
     private final Wrapped summary = new Wrapped(308, 5);
+    private final JPanel debriefBox = new JPanel();
+    private final JLabel debriefCaption = Ui.readout("debrief");
+    private final Wrapped debriefSummary = new Wrapped(308, 4);
+    private final Wrapped debriefNext = new Wrapped(308, 3);
     private final JPanel progressBox = new JPanel();
     private final JLabel progressCaption = Ui.readout("mission");
     private final Bar bar = new Bar();
@@ -65,6 +70,8 @@ final class MissionCard extends JPanel {
     private transient Incident shownIncident;
     private transient IncidentState shownState;
     private String lastProgress = "";
+    private String lastDebrief = "";
+    private boolean summaryText;
     private String shownButtons = "";
     private boolean relayout;
 
@@ -95,6 +102,10 @@ final class MissionCard extends JPanel {
         progressSub.setForeground(Theme.MUTED);
         progressUnits.setFont(Theme.ui(Font.PLAIN, 12f));
         progressUnits.setForeground(Theme.MUTED);
+        debriefSummary.setFont(Theme.ui(Font.PLAIN, 12f));
+        debriefSummary.setForeground(Theme.TEXT);
+        debriefNext.setFont(Theme.ui(Font.PLAIN, 12f));
+        debriefNext.setForeground(Theme.MUTED);
 
         JPanel heading = new JPanel(new BorderLayout(12, 0));
         heading.setOpaque(false);
@@ -129,6 +140,19 @@ final class MissionCard extends JPanel {
             ((JComponent) c).setAlignmentX(0f);
         }
 
+        debriefBox.setOpaque(false);
+        debriefBox.setLayout(new BoxLayout(debriefBox, BoxLayout.Y_AXIS));
+        debriefBox.add(Box.createVerticalStrut(12));
+        debriefBox.add(debriefCaption);
+        debriefBox.add(Box.createVerticalStrut(5));
+        debriefBox.add(debriefSummary);
+        debriefBox.add(Box.createVerticalStrut(4));
+        debriefBox.add(debriefNext);
+        for (java.awt.Component c : debriefBox.getComponents()) {
+            ((JComponent) c).setAlignmentX(0f);
+        }
+        debriefBox.setVisible(false);
+
         buttons.setOpaque(false);
         Ui.primary(planButton);
         Ui.danger(abortButton);
@@ -150,6 +174,7 @@ final class MissionCard extends JPanel {
         add(summary);
         add(Box.createVerticalStrut(14));
         add(progressBox);
+        add(debriefBox);
         add(Box.createVerticalStrut(14));
         add(buttons);
         for (java.awt.Component c : getComponents()) {
@@ -177,6 +202,7 @@ final class MissionCard extends JPanel {
         shownIncident = null;
         shownState = null;
         lastProgress = "";
+        lastDebrief = "";
         shownButtons = "";
         setVisible(false);
     }
@@ -246,10 +272,55 @@ final class MissionCard extends JPanel {
         grid.setText(IncidentList.gridRef(incident));
         String text = incident.summary() == null ? "" : incident.summary().strip();
         summary.setText(text);
-        summary.setVisible(!text.isEmpty());
+        summaryText = !text.isEmpty();
+        summary.setVisible(summaryText);
         badge.repaint();
         lastProgress = "";
+        lastDebrief = "";
         relayout = true;
+    }
+
+    /**
+     * Shows the debrief of a finished mission: the summary and the first suggestion for next time.
+     *
+     * @param debrief the written debrief, or {@code null} if there is none
+     * @param writing true while the debrief is still being written
+     */
+    void showDebrief(Debrief debrief, boolean writing) {
+        String caption;
+        String text;
+        String next;
+        if (debrief != null) {
+            caption = "debrief \u00B7 " + debrief.writtenBy();
+            text = debrief.summary();
+            next = debrief.nextTime().isEmpty() ? "" : "Next time: " + debrief.nextTime().get(0);
+        } else if (writing) {
+            caption = "debrief \u00B7 writing\u2026";
+            text = "";
+            next = "";
+        } else {
+            caption = "";
+            text = "";
+            next = "";
+        }
+        String signature = caption + "|" + text + "|" + next;
+        if (signature.equals(lastDebrief)) {
+            return;
+        }
+        lastDebrief = signature;
+        debriefCaption.setText(caption.isEmpty() ? " " : caption);
+        debriefSummary.setText(text);
+        debriefNext.setText(next);
+        debriefBox.setVisible(!caption.isEmpty());
+        // The news blurb gives way to the debrief once there is one, which keeps the card short.
+        summary.setVisible(summaryText && debrief == null);
+        revalidate();
+        repaint();
+    }
+
+    /** The debrief caption and summary currently shown, for tests. */
+    String shownDebrief() {
+        return debriefBox.isVisible() ? debriefCaption.getText() + " | " + debriefSummary.text() : "";
     }
 
     private void updateProgress(Mission mission, double nowSeconds) {

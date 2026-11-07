@@ -3,6 +3,7 @@ package com.fleetops.gui;
 import com.fleetops.app.AppContext;
 import com.fleetops.app.FleetLayout;
 import com.fleetops.app.SimulationRig;
+import com.fleetops.debrief.Debrief;
 import com.fleetops.domain.incident.Incident;
 import com.fleetops.domain.incident.IncidentState;
 import com.fleetops.intel.IngestReport;
@@ -21,9 +22,13 @@ import java.awt.Font;
 import java.awt.GridLayout;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.prefs.Preferences;
 import javax.swing.BorderFactory;
@@ -85,6 +90,10 @@ final class MainFrame extends JFrame {
     private final transient WindowCommands windowCommands = new WindowCommands(this);
     private transient MissionPlan pendingPlan;
     private transient MissionControl pendingControl;
+    /** The debriefs written so far and the missions still waiting for one; touched on the event thread only. */
+    private final transient Map<Mission, Debrief> debriefs = new HashMap<>();
+    private final transient Set<Mission> debriefing = new HashSet<>();
+    private boolean closing;
     private Console console;
     private final JLabel status = new JLabel(" ");
     private HeaderBar header;
@@ -342,6 +351,7 @@ final class MainFrame extends JFrame {
         Mission mission = rig == null ? null : rig.control().missionFor(selected).orElse(null);
         card.show(selected, mission, rig == null ? 0 : rig.engine().elapsedSeconds(), busy,
                 pendingPlan != null && pendingPlan.incident() == selected);
+        card.showDebrief(mission == null ? null : debriefs.get(mission), mission != null && debriefing.contains(mission));
     }
 
     private void appendLog(String line) {
@@ -576,6 +586,23 @@ final class MainFrame extends JFrame {
         out.line("Aborting: " + incident.title());
     }
 
+    void consoleDebrief(Incident incident, WindowCommands.Output out) {
+        String id = incident.id().map(String::valueOf).orElse("?");
+        Mission mission = rig == null ? null : rig.control().missionFor(incident).orElse(null);
+        if (mission == null || !mission.isFinished()) {
+            out.error("#" + id + " has no finished mission in this session.");
+            return;
+        }
+        Debrief debrief = debriefs.get(mission);
+        if (debrief != null) {
+            out.line(debrief.describe());
+        } else if (debriefing.contains(mission)) {
+            out.line("The debrief for #" + id + " is still being written.");
+        } else {
+            out.error("No debrief was written for #" + id + ".");
+        }
+    }
+
     void consoleAbortAll(WindowCommands.Output out) {
         if (rig == null || rig.control().activeMissions().isEmpty()) {
             out.error("No mission is running.");
@@ -716,7 +743,42 @@ final class MainFrame extends JFrame {
 
     private void onMissionFinished(Mission mission, MissionReport report) {
         appendLog(report.describe());
-        SwingUtilities.invokeLater(this::refreshIncidents);
+        SwingUtilities.invokeLater(() -> {
+            refreshIncidents();
+            writeDebrief(mission, report);
+        });
+    }
+
+    /** Has the AI write the debrief off the event thread, then shows it on the card and in the console. */
+    private void writeDebrief(Mission mission, MissionReport report) {
+        if (closing) {
+            return; // the window is being closed: do not spend an AI call on it
+        }
+        debriefing.add(mission);
+        Thread worker = new Thread(() -> {
+            Debrief debrief = null;
+            String failure = null;
+            try {
+                debrief = app.debriefer().debrief(report);
+            } catch (RuntimeException e) {
+                failure = e.getMessage() == null ? e.toString() : e.getMessage();
+            }
+            Debrief written = debrief;
+            String problem = failure;
+            SwingUtilities.invokeLater(() -> {
+                debriefing.remove(mission);
+                if (written != null) {
+                    debriefs.put(mission, written);
+                    appendLog(written.describe());
+                } else {
+                    appendLog("The debrief could not be written: " + problem);
+                }
+                updateButtons();
+            });
+        }, "debrief");
+        worker.setDaemon(true);
+        worker.start();
+        updateButtons();
     }
 
     // ---- helpers --------------------------------------------------------------------------------
@@ -735,6 +797,7 @@ final class MainFrame extends JFrame {
     }
 
     private void shutdown() {
+        closing = true;
         timer.stop();
         workspace.savePreferences();
         if (pendingPlan != null) {

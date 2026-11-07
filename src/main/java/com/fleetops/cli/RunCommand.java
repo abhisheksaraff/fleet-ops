@@ -65,6 +65,9 @@ final class RunCommand extends AbstractAppCommand {
     @Option(names = "--progress", description = "Print finds and rescues while the mission runs.")
     boolean progress;
 
+    @Option(names = "--no-debrief", description = "Skip the AI-written debrief that follows the report.")
+    boolean noDebrief;
+
     @Option(names = {"-v", "--verbose"}, description = "With --progress, also print every unit state change.")
     boolean verbose;
 
@@ -137,6 +140,10 @@ final class RunCommand extends AbstractAppCommand {
         MissionReport report = mission.report().orElseThrow(
                 () -> new IllegalStateException("The mission did not finish within " + maxTicks + " seconds."));
         out.println(report.describe());
+        if (!noDebrief) {
+            out.println();
+            out.println(app.debriefer().debrief(report).describe());
+        }
         return report.status() == MissionStatus.COMPLETED ? ExitCodes.OK : ExitCodes.FAILED;
     }
 
