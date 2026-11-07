@@ -306,6 +306,7 @@ final class Console extends JPanel {
         };
         String[][] map = {
             {"plan <id>", "ask the AI for a plan for a verified incident"},
+            {"edit [drones=N pattern=P ...]", "change the plan that is waiting (edit reset undoes it)"},
             {"launch", "start the plan that is waiting"},
             {"cancel", "drop the plan that is waiting"},
             {"abort [id|all]", "stop a mission (default: the selected one)"},

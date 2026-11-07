@@ -23,6 +23,7 @@ import com.fleetops.safety.SafetyPolicy;
 import com.fleetops.sim.IncidentZone;
 import com.fleetops.sim.SimulationEngine;
 import com.fleetops.sim.SurvivorSpawner;
+import com.fleetops.strategy.SearchStrategy;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -157,6 +158,43 @@ public final class MissionControl {
             throw e;
         }
         return plan;
+    }
+
+    /** How many drones and helicopters are ready to be sent right now: the limits for what an operator may ask for. */
+    public PlanningContext availability(Incident incident) {
+        return PlanningContext.of(Objects.requireNonNull(incident, "incident"), engine.world().fleet());
+    }
+
+    /**
+     * The operator changes a plan that is waiting for approval. The planner's decision is edited and
+     * compiled again, so the new plan goes through the same checks as the original: the drones must
+     * reach the area and get home with their battery reserve, and the rover must be able to get there.
+     * The incident stays PLANNED and nothing is queued; the original plan is not touched, so the
+     * operator can always go back to it.
+     *
+     * @param plan the plan to start from (normally the planner's own)
+     * @throws MissionException if the incident is no longer PLANNED
+     * @throws PlanningException if the change cannot be carried out (not enough ready drones or
+     *     helicopters, or the batteries cannot cover the area)
+     */
+    public MissionPlan revise(MissionPlan plan, int drones, SearchStrategy strategy, int helicopters) {
+        Objects.requireNonNull(plan, "plan");
+        Objects.requireNonNull(strategy, "strategy");
+        Incident incident = plan.incident();
+        if (incident.state() != IncidentState.PLANNED) {
+            throw new MissionException("'" + incident.title() + "' has no plan waiting for approval (it is " + incident.state() + ")");
+        }
+        if (drones < 1) {
+            throw new PlanningException("At least one drone is needed");
+        }
+        if (helicopters < 1) {
+            throw new PlanningException("At least one helicopter is needed so people who are found can be picked up");
+        }
+        int readyHelicopters = availability(incident).availableHelicopters();
+        if (helicopters > readyHelicopters) {
+            throw new PlanningException("Only " + readyHelicopters + " helicopter(s) are ready; " + helicopters + " were requested");
+        }
+        return compiler.compile(incident, plan.decision().edited(drones, strategy, helicopters), engine.world().fleet());
     }
 
     /** The operator turns a plan down: the incident goes back to VERIFIED and can be planned again. */

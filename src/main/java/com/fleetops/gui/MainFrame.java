@@ -10,10 +10,13 @@ import com.fleetops.intel.IngestReport;
 import com.fleetops.mission.Mission;
 import com.fleetops.mission.MissionControl;
 import com.fleetops.mission.MissionReport;
+import com.fleetops.plan.AreaGrid;
 import com.fleetops.plan.MissionPlan;
 import com.fleetops.safety.SafetyPolicy;
 import com.fleetops.sim.SimulationEngine;
 import com.fleetops.sim.SimulationEvent;
+import com.fleetops.strategy.SearchStrategies;
+import com.fleetops.strategy.SearchStrategy;
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
@@ -89,6 +92,8 @@ final class MainFrame extends JFrame {
             () -> consoleLaunch(logOutput), () -> consoleCancel(logOutput));
     private final transient WindowCommands windowCommands = new WindowCommands(this);
     private transient MissionPlan pendingPlan;
+    /** The plan as the planner made it, kept so the operator's changes can be undone; null with no plan waiting. */
+    private transient MissionPlan pendingOriginal;
     private transient MissionControl pendingControl;
     /** The debriefs written so far and the missions still waiting for one; touched on the event thread only. */
     private final transient Map<Mission, Debrief> debriefs = new HashMap<>();
@@ -462,11 +467,12 @@ final class MainFrame extends JFrame {
                         approve(current.control(), plan);
                     } else {
                         pendingPlan = plan;
+                        pendingOriginal = plan;
                         pendingControl = current.control();
                         for (String line : plan.describe().split("\\R")) {
                             out.line(line);
                         }
-                        out.line("Type launch to start the mission, or cancel to drop the plan.");
+                        out.line("Type launch to start the mission, edit to change it, or cancel to drop the plan.");
                         refreshIncidents();
                     }
                 } catch (InterruptedException e) {
@@ -486,19 +492,37 @@ final class MainFrame extends JFrame {
     }
 
     private void approve(MissionControl control, MissionPlan plan) {
-        boolean launch = PlanDialog.confirm(this, plan);
+        PlanDialog.Reviser reviser = new PlanDialog.Reviser() {
+            @Override
+            public MissionPlan revise(int drones, SearchStrategy strategy, int helicopters) {
+                return control.revise(plan, drones, strategy, helicopters);
+            }
+
+            @Override
+            public int maxDrones() {
+                return Math.min(control.availability(plan.incident()).availableDrones(), AreaGrid.MAX_CELLS);
+            }
+
+            @Override
+            public int maxHelicopters() {
+                return control.availability(plan.incident()).availableHelicopters();
+            }
+        };
+        Optional<MissionPlan> approved = PlanDialog.review(this, plan, reviser);
+        MissionPlan toLaunch = approved.orElse(plan);
         try {
-            if (launch) {
-                Mission mission = control.launch(plan);
-                appendLog("Launched: " + plan.incident().title() + " with " + mission.helicopters().size() + " helicopter(s).");
-                map.fit(plan.incident(), plan.depot());
+            if (approved.isPresent()) {
+                Mission mission = control.launch(toLaunch);
+                appendLog("Launched: " + toLaunch.incident().title() + " with " + mission.helicopters().size() + " helicopter(s)."
+                        + (toLaunch == plan ? "" : " The operator changed the plan."));
+                map.fit(toLaunch.incident(), toLaunch.depot());
             } else {
                 control.cancelPlan(plan);
                 appendLog("Plan cancelled for " + plan.incident().title() + ".");
             }
         } catch (RuntimeException e) {
             try {
-                control.cancelPlan(plan);
+                control.cancelPlan(toLaunch);
             } catch (RuntimeException ignored) {
                 // the incident was not PLANNED any more; nothing to undo
             }
@@ -533,6 +557,55 @@ final class MainFrame extends JFrame {
         }
     }
 
+    /**
+     * Changes the plan that is waiting. Each change starts again from the planner's own plan, so the
+     * operator can try values and always get back to the original with {@code edit reset}.
+     *
+     * @param drones the number of drones to send, or null to keep the current number
+     * @param patternName {@code lawnmower} or {@code spiral}, or null to keep the current pattern
+     * @param helicopters the number of helicopters to have ready, or null to keep the current number
+     * @param reset true to go back to the planner's own plan
+     */
+    void consoleEdit(Integer drones, String patternName, Integer helicopters, boolean reset, WindowCommands.Output out) {
+        if (pendingPlan == null) {
+            out.error("There is no plan waiting. Use: plan <id>");
+            return;
+        }
+        MissionPlan next;
+        if (reset) {
+            next = pendingOriginal;
+        } else if (drones == null && patternName == null && helicopters == null) {
+            out.line("The plan sends " + pendingPlan.drones().size() + " drone(s) searching with "
+                    + pendingPlan.decision().strategy().name() + " and has " + pendingPlan.decision().helicopters()
+                    + " helicopter(s) ready.");
+            out.line("Change it with: edit drones=N pattern=lawnmower|spiral helicopters=N   (edit reset goes back to the original)");
+            return;
+        } else {
+            SearchStrategy strategy;
+            try {
+                strategy = patternName == null ? pendingPlan.decision().strategy() : SearchStrategies.parse(patternName);
+            } catch (IllegalArgumentException e) {
+                out.error(e.getMessage());
+                return;
+            }
+            try {
+                next = pendingControl.revise(pendingOriginal,
+                        drones == null ? pendingPlan.drones().size() : drones,
+                        strategy,
+                        helicopters == null ? pendingPlan.decision().helicopters() : helicopters);
+            } catch (RuntimeException e) {
+                out.error("The plan cannot be changed that way: " + e.getMessage());
+                return;
+            }
+        }
+        pendingPlan = next;
+        for (String line : next.describe().split("\\R")) {
+            out.line(line);
+        }
+        out.line("Type launch to start the mission, edit to change it, or cancel to drop the plan.");
+        refreshIncidents();
+    }
+
     void consoleLaunch(WindowCommands.Output out) {
         if (pendingPlan == null) {
             out.error("There is no plan waiting. Use: plan <id>");
@@ -541,6 +614,7 @@ final class MainFrame extends JFrame {
         MissionPlan plan = pendingPlan;
         MissionControl control = pendingControl;
         pendingPlan = null;
+        pendingOriginal = null;
         pendingControl = null;
         try {
             Mission mission = control.launch(plan);
@@ -565,6 +639,7 @@ final class MainFrame extends JFrame {
         MissionPlan plan = pendingPlan;
         MissionControl control = pendingControl;
         pendingPlan = null;
+        pendingOriginal = null;
         pendingControl = null;
         try {
             control.cancelPlan(plan);
@@ -807,6 +882,7 @@ final class MainFrame extends JFrame {
                 // the incident was not PLANNED any more
             }
             pendingPlan = null;
+            pendingOriginal = null;
         }
         if (rig != null) {
             rig.control().abortAll("the window was closed");

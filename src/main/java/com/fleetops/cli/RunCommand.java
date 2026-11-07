@@ -11,6 +11,8 @@ import com.fleetops.mission.MissionControl;
 import com.fleetops.mission.MissionReport;
 import com.fleetops.mission.MissionStatus;
 import com.fleetops.plan.MissionPlan;
+import com.fleetops.strategy.SearchStrategies;
+import com.fleetops.strategy.SearchStrategy;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -46,6 +48,15 @@ final class RunCommand extends AbstractAppCommand {
 
     @Option(names = "--depot-km", defaultValue = "30", description = "How far south of the incident the fleet starts (default: ${DEFAULT-VALUE} km).")
     double depotKm;
+
+    @Option(names = "--send-drones", paramLabel = "N", description = "Change the plan: send N drones instead of the number the planner chose.")
+    Integer sendDrones;
+
+    @Option(names = "--send-helicopters", paramLabel = "N", description = "Change the plan: have N helicopters ready instead of the planner's number.")
+    Integer sendHelicopters;
+
+    @Option(names = "--pattern", paramLabel = "NAME", description = "Change the plan: search with lawnmower or spiral instead of the planner's choice.")
+    String pattern;
 
     @Option(names = "--seed", defaultValue = "42", description = "Random seed for where the survivors are (default: ${DEFAULT-VALUE}).")
     long seed;
@@ -93,6 +104,19 @@ final class RunCommand extends AbstractAppCommand {
             err.println("--max-ticks must be at least 1: " + maxTicks);
             return ExitCodes.USAGE;
         }
+        if ((sendDrones != null && sendDrones < 1) || (sendHelicopters != null && sendHelicopters < 1)) {
+            err.println("--send-drones and --send-helicopters must be at least 1.");
+            return ExitCodes.USAGE;
+        }
+        SearchStrategy chosenPattern = null;
+        if (pattern != null) {
+            try {
+                chosenPattern = SearchStrategies.parse(pattern);
+            } catch (IllegalArgumentException e) {
+                err.println("--pattern: " + e.getMessage());
+                return ExitCodes.USAGE;
+            }
+        }
 
         Optional<Incident> found = app.repository().findById(id);
         if (found.isEmpty()) {
@@ -110,6 +134,18 @@ final class RunCommand extends AbstractAppCommand {
         MissionControl control = rig.control();
 
         MissionPlan plan = control.plan(incident);
+        if (sendDrones != null || sendHelicopters != null || chosenPattern != null) {
+            try {
+                plan = control.revise(plan,
+                        sendDrones != null ? sendDrones : plan.decision().drones(),
+                        chosenPattern != null ? chosenPattern : plan.decision().strategy(),
+                        sendHelicopters != null ? sendHelicopters : plan.decision().helicopters());
+            } catch (RuntimeException e) {
+                control.cancelPlan(plan);
+                err.println("The plan cannot be changed that way: " + e.getMessage());
+                return ExitCodes.FAILED;
+            }
+        }
         out.println(plan.describe());
 
         if (dryRun) {

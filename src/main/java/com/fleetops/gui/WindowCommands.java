@@ -9,7 +9,7 @@ import java.util.Optional;
 
 /**
  * The console commands that drive the window itself rather than the database: {@code plan},
- * {@code launch}, {@code cancel}, {@code abort}, {@code debrief}, {@code focus}, {@code speed},
+ * {@code edit}, {@code launch}, {@code cancel}, {@code abort}, {@code debrief}, {@code focus}, {@code speed},
  * {@code fleet} and {@code layout}. This class only reads and checks what was typed; the window does the work.
  */
 final class WindowCommands {
@@ -22,7 +22,7 @@ final class WindowCommands {
     }
 
     /** The names, in the order {@code help} lists them. */
-    static final List<String> NAMES = List.of("plan", "launch", "cancel", "abort", "debrief", "focus", "speed", "fleet", "layout");
+    static final List<String> NAMES = List.of("plan", "edit", "launch", "cancel", "abort", "debrief", "focus", "speed", "fleet", "layout");
 
     private final MainFrame frame;
 
@@ -38,6 +38,7 @@ final class WindowCommands {
     void run(String name, List<String> args, Output out) {
         switch (name) {
             case "plan" -> plan(args, out);
+            case "edit" -> edit(args, out);
             case "launch" -> frame.consoleLaunch(out);
             case "cancel" -> frame.consoleCancel(out);
             case "abort" -> abort(args, out);
@@ -85,6 +86,48 @@ final class WindowCommands {
             }
         }
         frame.consoleAbort(target, out);
+    }
+
+    private static final String EDIT_USAGE = "edit [drones=N] [pattern=lawnmower|spiral] [helicopters=N] | edit reset";
+
+    private void edit(List<String> args, Output out) {
+        Integer drones = null;
+        Integer helicopters = null;
+        String pattern = null;
+        boolean reset = false;
+        for (String token : args.subList(1, args.size())) {
+            if (token.equalsIgnoreCase("reset")) {
+                reset = true;
+                continue;
+            }
+            int equals = token.indexOf('=');
+            if (equals < 1) {
+                out.error("'" + token + "' is not name=value. Usage: " + EDIT_USAGE);
+                return;
+            }
+            String key = token.substring(0, equals).toLowerCase(Locale.ROOT);
+            String value = token.substring(equals + 1);
+            switch (key) {
+                case "drones", "helicopters" -> {
+                    Integer number = parseInt(value);
+                    if (number == null) {
+                        out.error("'" + value + "' is not a whole number. Usage: " + EDIT_USAGE);
+                        return;
+                    }
+                    if (key.equals("drones")) {
+                        drones = number;
+                    } else {
+                        helicopters = number;
+                    }
+                }
+                case "pattern" -> pattern = value;
+                default -> {
+                    out.error("Unknown setting '" + key + "'. Usage: " + EDIT_USAGE);
+                    return;
+                }
+            }
+        }
+        frame.consoleEdit(drones, pattern, helicopters, reset, out);
     }
 
     private void debrief(List<String> args, Output out) {
@@ -231,6 +274,7 @@ final class WindowCommands {
                 out.add("all");
                 yield out;
             }
+            case "edit" -> List.of("drones=", "pattern=lawnmower", "pattern=spiral", "helicopters=", "reset");
             case "debrief" -> ids(incidents, i -> true);
             case "focus" -> {
                 java.util.ArrayList<String> out = new java.util.ArrayList<>(ids(incidents, i -> true));
