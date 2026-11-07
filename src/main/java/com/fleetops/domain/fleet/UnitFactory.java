@@ -29,11 +29,16 @@ public final class UnitFactory {
             case DRONE -> createDrone(position);
             case HELICOPTER -> createHelicopter(position);
             case CARRIER -> createCarrier(position, 0);
+            case ROBODOG -> createRobodog(position);
         };
     }
 
     public Drone createDrone(GeoPoint position) {
         return new Drone(nextId(UnitType.DRONE), position);
+    }
+
+    public Robodog createRobodog(GeoPoint position) {
+        return new Robodog(nextId(UnitType.ROBODOG), position);
     }
 
     public Helicopter createHelicopter(GeoPoint position) {
@@ -42,13 +47,25 @@ public final class UnitFactory {
 
     /** Creates a rover already loaded with the given number of new, fully charged drones. */
     public Carrier createCarrier(GeoPoint position, int droneCount) {
+        return createCarrier(position, droneCount, 0);
+    }
+
+    /** Creates a rover already loaded with new, fully charged drones and robodogs. */
+    public Carrier createCarrier(GeoPoint position, int droneCount, int robodogCount) {
         if (droneCount < 0 || droneCount > Carrier.DEFAULT_DRONE_CAPACITY) {
             throw new IllegalArgumentException(
                     "droneCount must be between 0 and " + Carrier.DEFAULT_DRONE_CAPACITY + ": " + droneCount);
         }
+        if (robodogCount < 0 || robodogCount > Carrier.DEFAULT_ROBODOG_CAPACITY) {
+            throw new IllegalArgumentException(
+                    "robodogCount must be between 0 and " + Carrier.DEFAULT_ROBODOG_CAPACITY + ": " + robodogCount);
+        }
         Carrier carrier = new Carrier(nextId(UnitType.CARRIER), position, Carrier.DEFAULT_DRONE_CAPACITY);
         for (int i = 0; i < droneCount; i++) {
             carrier.addDrone(createDrone(position));
+        }
+        for (int i = 0; i < robodogCount; i++) {
+            carrier.addRobodog(createRobodog(position));
         }
         return carrier;
     }

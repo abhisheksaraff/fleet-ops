@@ -18,3 +18,4 @@ data/
 .DS_Store
 *.log
 .claude/
+.claude

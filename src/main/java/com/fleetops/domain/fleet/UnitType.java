@@ -8,7 +8,8 @@ import java.util.stream.Collectors;
 public enum UnitType {
     DRONE("DRONE"),
     HELICOPTER("HELI"),
-    CARRIER("ROVER");
+    CARRIER("ROVER"),
+    ROBODOG("DOG");
 
     private final String idPrefix;
 

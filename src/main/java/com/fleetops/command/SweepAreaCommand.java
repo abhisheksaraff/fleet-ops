@@ -1,6 +1,7 @@
 package com.fleetops.command;
 
-import com.fleetops.domain.fleet.Drone;
+import com.fleetops.domain.fleet.Sensing;
+import com.fleetops.domain.fleet.Unit;
 import com.fleetops.domain.geo.GeoArea;
 import com.fleetops.domain.geo.GeoPoint;
 import com.fleetops.sim.SimulationEngine;
@@ -10,12 +11,14 @@ import java.util.Locale;
 import java.util.Objects;
 
 /**
- * A drone flies a search pattern over an incident area and reveals the survivors it passes. The
- * pattern comes from a {@link SearchStrategy}, so the same command works for any of them.
+ * A drone or robodog follows a search pattern over an incident area and reveals the survivors it
+ * passes. The pattern comes from a {@link SearchStrategy}, so the same command works for any of
+ * them, and for any unit that can sense survivors.
  */
 public final class SweepAreaCommand extends AbstractMissionCommand {
 
-    private final Drone drone;
+    private final Unit unit;
+    private final Sensing sensor;
     private final GeoArea area;
     private final SearchStrategy strategy;
     private final List<GeoPoint> path;
@@ -23,17 +26,18 @@ public final class SweepAreaCommand extends AbstractMissionCommand {
     private int nextWaypoint;
     private int survivorsFound;
 
-    public SweepAreaCommand(Drone drone, GeoArea area, SearchStrategy strategy) {
-        super(drone);
-        this.drone = drone;
+    public <U extends Unit & Sensing> SweepAreaCommand(U searcher, GeoArea area, SearchStrategy strategy) {
+        super(searcher);
+        this.unit = searcher;
+        this.sensor = searcher;
         this.area = Objects.requireNonNull(area, "area");
         this.strategy = Objects.requireNonNull(strategy, "strategy");
-        this.path = List.copyOf(strategy.computePath(area, drone.sensorRadiusKm()));
+        this.path = List.copyOf(strategy.computePath(area, searcher.sensorRadiusKm()));
     }
 
     @Override
     public String describe() {
-        return drone.id() + " sweep " + String.format(Locale.ROOT, "%.1f", area.sideKm())
+        return unit.id() + " sweep " + String.format(Locale.ROOT, "%.1f", area.sideKm())
                 + " km square (" + strategy.name() + ")";
     }
 
@@ -63,7 +67,7 @@ public final class SweepAreaCommand extends AbstractMissionCommand {
         if (isFinished()) {
             return;
         }
-        survivorsFound += engine.revealSurvivors(drone, drone.sensorRadiusKm());
+        survivorsFound += engine.revealSurvivors(unit, sensor.sensorRadiusKm());
 
         if (reachedWaypoint) {
             if (nextWaypoint == 0) {

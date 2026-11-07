@@ -1,6 +1,7 @@
 package com.fleetops.gui;
 
 import com.fleetops.domain.fleet.Drone;
+import com.fleetops.domain.fleet.Robodog;
 import com.fleetops.domain.fleet.Helicopter;
 import com.fleetops.domain.fleet.Carrier;
 import com.fleetops.domain.fleet.Unit;
@@ -337,7 +338,7 @@ final class MapOverlay implements Painter<JXMapViewer> {
     }
 
     private void drawUnit(Graphics2D g, JXMapViewer map, Unit unit, boolean pictures, double phase) {
-        if (unit instanceof Drone && unit.state() == UnitState.IDLE) {
+        if ((unit instanceof Drone || unit instanceof Robodog) && unit.state() == UnitState.IDLE) {
             return; // docked on its rover
         }
         Point2D p = toPixel(map, unit.position());
