@@ -15,14 +15,12 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.GridLayout;
 import java.awt.RenderingHints;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Arc2D;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
-import java.awt.geom.RoundRectangle2D;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -42,7 +40,6 @@ import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
-import javax.swing.JToggleButton;
 import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
 import javax.swing.ScrollPaneConstants;
@@ -60,7 +57,7 @@ import javax.swing.event.DocumentListener;
 final class IncidentList extends JPanel {
 
     private static final long serialVersionUID = 1L;
-    private static final int CELL_HEIGHT = 72;
+    private static final int CELL_HEIGHT = 78;
 
     /** Which incidents are listed. */
     enum Show {
@@ -134,7 +131,7 @@ final class IncidentList extends JPanel {
     private final JTextField search = new JTextField();
     private final JComboBox<Sort> sortBox = new JComboBox<>(Sort.values());
     private final JLabel count = new JLabel(" ");
-    private final transient Map<Show, JToggleButton> chips = new EnumMap<>(Show.class);
+    private final transient Map<Show, Ui.Tab> chips = new EnumMap<>(Show.class);
     private final transient List<BiConsumer<Incident, Boolean>> listeners = new ArrayList<>();
 
     private transient List<Incident> all = List.of();
@@ -149,7 +146,7 @@ final class IncidentList extends JPanel {
         search.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Search incidents");
         search.putClientProperty(FlatClientProperties.TEXT_FIELD_LEADING_ICON, Icons.search());
         search.putClientProperty(FlatClientProperties.TEXT_FIELD_SHOW_CLEAR_BUTTON, true);
-        search.putClientProperty(FlatClientProperties.STYLE, "arc:14; margin:4,8,4,8; focusWidth:1");
+        search.putClientProperty(FlatClientProperties.STYLE, "arc:3; margin:4,8,4,8; focusWidth:1");
         search.getDocument().addDocumentListener(new DocumentListener() {
             @Override
             public void insertUpdate(DocumentEvent e) {
@@ -167,20 +164,13 @@ final class IncidentList extends JPanel {
             }
         });
 
-        JPanel chipRow = new JPanel(new GridLayout(1, Show.values().length, 6, 0));
+        JPanel chipRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 16, 0));
         chipRow.setOpaque(false);
+        chipRow.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, Theme.BORDER));
         ButtonGroup group = new ButtonGroup();
         for (Show option : Show.values()) {
-            JToggleButton chip = new JToggleButton(option.label());
-            chip.setFocusable(false);
+            Ui.Tab chip = new Ui.Tab(option.label());
             chip.setSelected(option == show);
-            chip.putClientProperty(FlatClientProperties.STYLE,
-                    "arc:999; borderWidth:1; focusWidth:0; margin:3,8,3,8"
-                            + "; background:" + Theme.hex(Theme.PANEL)
-                            + "; foreground:" + Theme.hex(Theme.MUTED)
-                            + "; borderColor:" + Theme.hex(Theme.BORDER)
-                            + "; hoverBackground:#1D2126; pressedBackground:#262B32"
-                            + "; selectedBackground:#1B2B25; selectedForeground:" + Theme.hex(Theme.ACCENT));
             chip.addActionListener(e -> setShow(option));
             group.add(chip);
             chips.put(option, chip);
@@ -188,7 +178,8 @@ final class IncidentList extends JPanel {
         }
 
         count.setForeground(Theme.MUTED);
-        sortBox.putClientProperty(FlatClientProperties.STYLE, "arc:12");
+        count.setFont(Theme.mono(11f));
+        sortBox.putClientProperty(FlatClientProperties.STYLE, "arc:3");
         sortBox.setFocusable(false);
         sortBox.addActionListener(e -> rebuild(false));
         JPanel sortRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
@@ -204,10 +195,11 @@ final class IncidentList extends JPanel {
         top.setOpaque(false);
         top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
         top.add(search);
-        top.add(Box.createVerticalStrut(8));
+        top.add(Box.createVerticalStrut(10));
         top.add(chipRow);
-        top.add(Box.createVerticalStrut(6));
+        top.add(Box.createVerticalStrut(8));
         top.add(metaRow);
+        top.add(Box.createVerticalStrut(4));
         for (Component c : top.getComponents()) {
             JComponent jc = (JComponent) c;
             jc.setAlignmentX(0f);
@@ -432,7 +424,7 @@ final class IncidentList extends JPanel {
             if (listModel.isEmpty()) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-                g2.setFont(Theme.ui(Font.BOLD, 13f));
+                g2.setFont(Theme.serif(15f));
                 g2.setColor(Theme.TEXT);
                 String title = emptyTitle();
                 FontMetrics fm = g2.getFontMetrics();
@@ -447,7 +439,11 @@ final class IncidentList extends JPanel {
         }
     }
 
-    /** One incident drawn as a rounded card. */
+    /**
+     * One incident drawn as a ruled row of a map legend: the disaster's symbol in a square frame, the
+     * title in the serif face, the grid reference in mono, then severity, people and state. No card,
+     * no fill unless the row is selected or hovered.
+     */
     private final class Card extends JComponent implements ListCellRenderer<Incident> {
         private static final long serialVersionUID = 1L;
         private transient Incident incident;
@@ -475,53 +471,72 @@ final class IncidentList extends JPanel {
             int w = getWidth();
             int h = getHeight();
 
-            RoundRectangle2D card = new RoundRectangle2D.Float(2.5f, 3.5f, w - 5f, h - 7f, 18, 18);
-            g.setColor(selected ? new Color(0x1B2B25) : hover ? new Color(0x232830) : Theme.RAISED);
-            g.fill(card);
-            g.setStroke(new BasicStroke(selected ? 1.6f : 1f));
+            if (selected) {
+                g.setColor(new Color(0x1A2A39));
+                g.fillRect(0, 0, w, h);
+            } else if (hover) {
+                g.setColor(new Color(0x122030));
+                g.fillRect(0, 0, w, h);
+            }
             g.setColor(selected ? Theme.ACCENT : Theme.BORDER);
-            g.draw(card);
+            g.setStroke(new BasicStroke(1f));
+            if (selected) {
+                g.drawRect(0, 0, w - 1, h - 1);
+            } else {
+                g.drawLine(0, h - 1, w, h - 1);
+            }
 
-            int cy = h / 2;
-            int cx = 2 + 14 + 20;
-            paintTypeIcon(g, incident.type(), cx, cy, 20, typeColor(incident.type()));
+            // the disaster's symbol in a square frame
+            int pad = 12;
+            int box = 36;
+            int bx = pad;
+            int by = (h - box) / 2;
+            Color tc = typeColor(incident.type());
+            g.setColor(Ui.alpha(tc, 150));
+            g.drawRect(bx, by, box, box);
+            paintTypeIcon(g, incident.type(), bx + box / 2, by + box / 2, 15, tc);
 
-            int left = cx + 20 + 14;
-            int right = w - 2 - 14;
+            int left = bx + box + 12;
+            int right = w - pad;
 
-            // second line: severity, people and the state chip on the right
-            String[] chip = stateChip(incident.state());
-            Color chipColor = stateColor(incident.state());
-            g.setFont(Theme.ui(Font.BOLD, 10f));
-            FontMetrics cfm = g.getFontMetrics();
-            int chipW = cfm.stringWidth(chip[0]) + 16;
-            int chipH = 18;
-            int chipX = right - chipW;
-            int chipY = cy + 5;
-            g.setColor(Ui.alpha(chipColor, 40));
-            g.fill(new RoundRectangle2D.Float(chipX, chipY, chipW, chipH, chipH, chipH));
-            g.setColor(chipColor);
-            g.drawString(chip[0], chipX + 8, chipY + (chipH + cfm.getAscent() - cfm.getDescent()) / 2);
-
-            // first line: title
-            g.setFont(Theme.ui(Font.BOLD, 13f));
+            // line 1: the title, in the serif face
+            g.setFont(Theme.serif(14.5f));
             g.setColor(Theme.TEXT);
-            g.drawString(ellipsize(incident.title(), g.getFontMetrics(), right - left), left, cy - 6);
+            FontMetrics tf = g.getFontMetrics();
+            int line1 = by + tf.getAscent() - 3;
+            g.drawString(ellipsize(incident.title(), tf, right - left), left, line1);
 
-            Color sevColor = severityColor(incident.severity());
-            int metaBase = chipY + 13;
-            g.setColor(sevColor);
-            g.fill(new Ellipse2D.Float(left, metaBase - 8, 8, 8));
-            g.setFont(Theme.ui(Font.BOLD, 11f));
-            String sev = titleCase(incident.severity().name());
-            g.drawString(sev, left + 14, metaBase);
-            int after = left + 14 + g.getFontMetrics().stringWidth(sev);
+            // line 2: grid reference in mono
+            g.setFont(Theme.mono(11f));
+            g.setColor(Theme.MUTED);
+            FontMetrics mf = g.getFontMetrics();
+            int line2 = line1 + 17;
+            String grid = gridRef(incident);
+            g.drawString(grid, left, line2);
+
+            // line 3: severity, people, state on the right
+            int line3 = line2 + 16;
+            Color sev = severityColor(incident.severity());
+            g.setColor(sev);
+            g.fillRect(left, line3 - 8, 8, 8);
+            g.setFont(Theme.ui(Font.BOLD, 12f));
+            FontMetrics bf = g.getFontMetrics();
+            String sevName = titleCase(incident.severity().name());
+            g.drawString(sevName, left + 14, line3);
+            int after = left + 14 + bf.stringWidth(sevName);
             g.setFont(Theme.ui(Font.PLAIN, 12f));
             g.setColor(Theme.MUTED);
-            String people = "  ·  " + incident.estimatedPeople() + " people";
-            if (after + g.getFontMetrics().stringWidth(people) < chipX - 6) {
-                g.drawString(people, after, metaBase);
-            }
+            String people = "  \u00B7  " + incident.estimatedPeople() + " people";
+            g.drawString(people, after, line3);
+
+            String[] chip = stateChip(incident.state());
+            Color sc = stateColor(incident.state());
+            g.setFont(Theme.mono(11f).deriveFont(Font.BOLD));
+            FontMetrics sf = g.getFontMetrics();
+            int sw = sf.stringWidth(chip[0]);
+            g.setColor(sc);
+            g.drawString(chip[0], right - sw, line3);
+            g.fillRect(right - sw - 12, line3 - 8, 7, 7);
             g.dispose();
         }
 
@@ -529,6 +544,14 @@ final class IncidentList extends JPanel {
         public Dimension getPreferredSize() {
             return new Dimension(100, CELL_HEIGHT);
         }
+    }
+
+    /** The incident's centre as a map grid reference, for example {@code 63.747N 068.517W}. */
+    static String gridRef(Incident incident) {
+        double lat = incident.area().center().lat();
+        double lon = incident.area().center().lon();
+        return String.format(Locale.ROOT, "%06.3f%s %07.3f%s", Math.abs(lat), lat >= 0 ? "N" : "S",
+                Math.abs(lon), lon >= 0 ? "E" : "W");
     }
 
     private static String ellipsize(String text, FontMetrics fm, int width) {
@@ -550,22 +573,22 @@ final class IncidentList extends JPanel {
     static Color typeColor(IncidentType type) {
         return switch (type) {
             case FLOOD -> Theme.INFO;
-            case FIRE -> new Color(0xFF8A4C);
-            case EARTHQUAKE -> Theme.WARN;
-            case FAMINE -> new Color(0xB58CFF);
+            case FIRE -> new Color(0xE9783D);
+            case EARTHQUAKE -> new Color(0xC79A6A);
+            case FAMINE -> new Color(0xC2BA6A);
         };
     }
 
     static Color severityColor(Severity severity) {
         return switch (severity) {
-            case LOW -> new Color(0x7BD389);
-            case MODERATE -> Theme.WARN;
-            case HIGH -> new Color(0xFF8A4C);
+            case LOW -> new Color(0x9CB87C);
+            case MODERATE -> new Color(0xE3C14F);
+            case HIGH -> new Color(0xE9783D);
             case CRITICAL -> Theme.DANGER;
         };
     }
 
-    /** The short label shown on a card for a lifecycle state. */
+    /** The short label shown on a row for a lifecycle state. */
     static String[] stateChip(IncidentState state) {
         return switch (state) {
             case NEW -> new String[] {"NEW"};
@@ -582,22 +605,21 @@ final class IncidentList extends JPanel {
         return switch (state) {
             case VERIFIED -> Theme.INFO;
             case PLANNED -> Theme.WARN;
-            case IN_PROGRESS -> Theme.ACCENT;
+            case IN_PROGRESS -> Theme.LIVE;
+            case COMPLETED -> Theme.DONE;
             default -> Theme.MUTED;
         };
     }
 
-    /** A round badge with a small drawing of the disaster in it. Reused by the map markers later. */
+    /** A small line drawing of the disaster, centred on a point; callers draw their own frame around it. */
     static void paintTypeIcon(Graphics2D g0, IncidentType type, int cx, int cy, int radius, Color color) {
         Graphics2D g = (Graphics2D) g0.create();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g.setColor(Ui.alpha(color, 38));
-        g.fill(new Ellipse2D.Float(cx - radius, cy - radius, radius * 2f, radius * 2f));
         g.translate(cx, cy);
         double scale = radius / 20.0;
         g.scale(scale, scale);
         g.setColor(color);
-        g.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g.setStroke(new BasicStroke(2.4f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER));
         switch (type) {
             case FLOOD -> {
                 for (int row = -1; row <= 1; row++) {
@@ -618,7 +640,7 @@ final class IncidentList extends JPanel {
                 flame.curveTo(-2, -4, -1.5, -3, 0, -11);
                 flame.closePath();
                 g.fill(flame);
-                g.setColor(Theme.RAISED);
+                g.setColor(Theme.PANEL);
                 g.fill(new Ellipse2D.Float(-3f, 3f, 6f, 6f));
             }
             case EARTHQUAKE -> {

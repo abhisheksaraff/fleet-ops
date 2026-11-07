@@ -83,22 +83,22 @@ final class Sprites {
     };
 
     private static final Map<Character, Color> PALETTE = Map.ofEntries(
-            Map.entry('k', new Color(0x0B0D0F)),
-            Map.entry('d', new Color(0x23282E)),
-            Map.entry('t', new Color(0x3A424B)),
-            Map.entry('m', new Color(0x2FA878)),
-            Map.entry('M', new Color(0x46E0A0)),
+            Map.entry('k', new Color(0x0A121A)),
+            Map.entry('d', new Color(0x1F2D3A)),
+            Map.entry('t', new Color(0x35495A)),
+            Map.entry('m', new Color(0x6F9A4B)),
+            Map.entry('M', new Color(0x9CCB6B)),
             Map.entry('w', new Color(0x9AD7FF)),
             Map.entry('y', new Color(0xFFD166)),
             Map.entry('s', new Color(0x2B4C7E)),
             Map.entry('S', new Color(0x4F86D6)),
-            Map.entry('c', new Color(0x9AA3AE)),
+            Map.entry('c', new Color(0xA9B2B8)),
             Map.entry('a', new Color(0x7C8590)),
             Map.entry('B', new Color(0x5AA9FF)),
-            Map.entry('W', new Color(0xE8EAED)),
-            Map.entry('P', new Color(0xB58CFF)),
-            Map.entry('T', new Color(0x7F5BC2)),
-            Map.entry('h', new Color(0xF2D3B3)));
+            Map.entry('W', new Color(0xEBE4D0)),
+            Map.entry('P', new Color(0xE3B455)),
+            Map.entry('T', new Color(0xA9792A)),
+            Map.entry('h', new Color(0xEBCDAA)));
 
     private static BufferedImage rover;
     private static BufferedImage drone;
@@ -154,7 +154,7 @@ final class Sprites {
         for (int i = 0; i < 4; i++) {
             double hx = (i % 2 == 0 ? -offset : offset);
             double hy = (i < 2 ? -offset : offset);
-            blades(g, hx, hy, 3.6 * scale, phase * (i % 2 == 0 ? 1 : -1) * 40, new Color(0xE8EAED));
+            blades(g, hx, hy, 3.6 * scale, phase * (i % 2 == 0 ? 1 : -1) * 40, new Color(0xEBE4D0));
         }
         g.dispose();
     }
@@ -164,8 +164,8 @@ final class Sprites {
         Graphics2D g = (Graphics2D) g0.create();
         g.translate(cx, cy);
         g.rotate(heading);
-        blades(g, 0, -2.5 * scale, 8.0 * scale, phase * 28, new Color(0xE8EAED));
-        blades(g, 0, 6.0 * scale, 2.8 * scale, phase * 45, new Color(0xE8EAED));
+        blades(g, 0, -2.5 * scale, 8.0 * scale, phase * 28, new Color(0xEBE4D0));
+        blades(g, 0, 6.0 * scale, 2.8 * scale, phase * 45, new Color(0xEBE4D0));
         g.dispose();
     }
 

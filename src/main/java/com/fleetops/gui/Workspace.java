@@ -16,7 +16,7 @@ final class Workspace extends JPanel {
 
     private static final long serialVersionUID = 1L;
     private static final int SIDEBAR_WIDTH = 420;
-    private static final int CONSOLE_HEIGHT = 270;
+    private static final int CONSOLE_HEIGHT = 236;
 
     /** Ready-made arrangements of the window. */
     enum Preset {
@@ -54,7 +54,7 @@ final class Workspace extends JPanel {
         add(outer, BorderLayout.CENTER);
 
         sidebar.setExpandedSize(read("sidebarWidth", SIDEBAR_WIDTH));
-        console.setExpandedSize(read("consoleHeight2", CONSOLE_HEIGHT));
+        console.setExpandedSize(read("consoleHeight3", CONSOLE_HEIGHT));
         apply(prefs == null || get("sidebarOpen", true), prefs == null || get("consoleOpen", true));
     }
 
@@ -101,7 +101,7 @@ final class Workspace extends JPanel {
             prefs.putBoolean("sidebarOpen", sidebarOpen());
             prefs.putBoolean("consoleOpen", consoleOpen());
             prefs.putInt("sidebarWidth", sidebar.expandedSize());
-            prefs.putInt("consoleHeight2", console.expandedSize());
+            prefs.putInt("consoleHeight3", console.expandedSize());
             prefs.flush();
         } catch (java.util.prefs.BackingStoreException | SecurityException | IllegalStateException e) {
             // Not being able to remember the layout is not worth an error.

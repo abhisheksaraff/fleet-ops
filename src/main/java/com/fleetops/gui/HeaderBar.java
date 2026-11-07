@@ -7,7 +7,6 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.RenderingHints;
 import javax.swing.BorderFactory;
 import javax.swing.ButtonGroup;
 import javax.swing.JLabel;
@@ -15,20 +14,22 @@ import javax.swing.JPanel;
 import javax.swing.JToggleButton;
 
 /**
- * The strip across the top: the FleetOps mark and name, buttons that show or hide the sidebar and
- * the console, and the layout presets. On macOS it sits in the window's title bar area, so it also
- * works as the place to drag the window.
+ * The strip across the top, laid out like the title block of a survey sheet: the FleetOps mark and
+ * name, a live readout of where the map is centred, the layout presets as text tabs and buttons that
+ * show or hide the sidebar and the console. On macOS it sits in the window's title bar area, so it
+ * also works as the place to drag the window.
  */
 final class HeaderBar extends JPanel {
 
     private static final long serialVersionUID = 1L;
-    static final int HEIGHT = 52;
+    static final int HEIGHT = 54;
 
     private final transient Workspace workspace;
     private final JToggleButton sidebarToggle = iconToggle(Icons.sidebar(), "Show or hide the incident sidebar");
     private final JToggleButton consoleToggle = iconToggle(Icons.console(), "Show or hide the console");
     private final transient java.util.Map<Workspace.Preset, JToggleButton> presetButtons = new java.util.EnumMap<>(Workspace.Preset.class);
     private final ButtonGroup presetGroup = new ButtonGroup();
+    private final JLabel readout = Ui.readout(" ");
     private boolean syncing;
 
     HeaderBar(Workspace workspace) {
@@ -36,29 +37,28 @@ final class HeaderBar extends JPanel {
         this.workspace = workspace;
         setBackground(Theme.PANEL);
         setPreferredSize(new Dimension(100, HEIGHT));
-        setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, Theme.BORDER));
         putClientProperty(FlatClientProperties.COMPONENT_TITLE_BAR_CAPTION, true);
 
-        JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
+        JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 12));
         left.setOpaque(false);
         JPanel buttonsPlaceholder = new JPanel();
         buttonsPlaceholder.setOpaque(false);
         buttonsPlaceholder.putClientProperty(FlatClientProperties.FULL_WINDOW_CONTENT_BUTTONS_PLACEHOLDER, "mac");
         left.add(buttonsPlaceholder);
         left.add(sidebarToggle);
-        left.add(new JLabel(Icons.logo(28)));
-        JLabel name = new JLabel("fleetops");
-        name.setFont(Theme.ui(Font.BOLD, 18f));
+        left.add(new JLabel(Icons.logo(26)));
+        JLabel name = new JLabel("FleetOps");
+        name.setFont(Theme.serif(21f));
+        name.setForeground(Theme.TEXT);
         left.add(name);
-        JLabel tagline = Ui.muted("mission control");
-        tagline.setFont(Theme.ui(Font.PLAIN, 12f));
-        left.add(tagline);
+        left.add(new Rule());
+        left.add(readout);
 
-        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));
+        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 14, 12));
         right.setOpaque(false);
         right.add(buildPresets());
         right.add(consoleToggle);
-        right.add(Spacer.of(4));
+        right.add(Spacer.of(2));
 
         add(left, BorderLayout.WEST);
         add(right, BorderLayout.EAST);
@@ -77,27 +77,22 @@ final class HeaderBar extends JPanel {
         sync();
     }
 
-    private JPanel buildPresets() {
-        JPanel segmented = new JPanel(new FlowLayout(FlowLayout.CENTER, 2, 2)) {
-            private static final long serialVersionUID = 1L;
+    /** Sets the map-centre readout, for example {@code 63.747°N 068.517°W · 1:50 km}. */
+    void setReadout(String text) {
+        if (!text.equals(readout.getText())) {
+            readout.setText(text);
+        }
+    }
 
-            @Override
-            protected void paintComponent(Graphics g) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(Theme.RAISED);
-                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 14, 14);
-                g2.dispose();
-            }
-        };
-        segmented.setOpaque(false);
+    String readout() {
+        return readout.getText();
+    }
+
+    private JPanel buildPresets() {
+        JPanel tabs = new JPanel(new FlowLayout(FlowLayout.CENTER, 16, 0));
+        tabs.setOpaque(false);
         for (Workspace.Preset preset : Workspace.Preset.values()) {
-            JToggleButton button = new JToggleButton(preset.label);
-            button.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_ROUND_RECT);
-            button.putClientProperty(FlatClientProperties.STYLE,
-                    "arc:10; borderWidth:0; focusWidth:0; background:#1D2126; foreground:#8B939D"
-                            + "; selectedBackground:#2B323A; selectedForeground:#46E0A0"
-                            + "; hoverBackground:#242A30; margin:4,12,4,12");
+            Ui.Tab button = new Ui.Tab(preset.label);
             button.setToolTipText(describe(preset));
             button.addActionListener(e -> {
                 if (!syncing) {
@@ -106,9 +101,9 @@ final class HeaderBar extends JPanel {
             });
             presetGroup.add(button);
             presetButtons.put(preset, button);
-            segmented.add(button);
+            tabs.add(button);
         }
-        return segmented;
+        return tabs;
     }
 
     private static String describe(Workspace.Preset preset) {
@@ -122,11 +117,11 @@ final class HeaderBar extends JPanel {
     private static JToggleButton iconToggle(javax.swing.Icon icon, String tooltip) {
         JToggleButton button = new JToggleButton(icon);
         button.setToolTipText(tooltip);
-        button.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_ROUND_RECT);
+        button.setFocusable(false);
         button.putClientProperty(FlatClientProperties.STYLE,
-                "arc:10; borderWidth:0; focusWidth:0; background:#15181C; foreground:#8B939D"
-                        + "; selectedBackground:#2B323A; selectedForeground:#46E0A0; hoverBackground:#242A30"
-                        + "; margin:5,7,5,7");
+                "arc:3; borderWidth:1; focusWidth:0; background:#0E1823; foreground:#A39F8E"
+                        + "; borderColor:#2A3B4A; selectedBackground:#1B2C3B; selectedForeground:#EBE4D0"
+                        + "; hoverBackground:#172736; margin:5,7,5,7");
         return button;
     }
 
@@ -144,6 +139,35 @@ final class HeaderBar extends JPanel {
             }
         } finally {
             syncing = false;
+        }
+    }
+
+    /** The double rule along the bottom edge, as on the frame of a map sheet. */
+    @Override
+    protected void paintChildren(Graphics g) {
+        super.paintChildren(g);
+        Graphics2D g2 = (Graphics2D) g.create();
+        g2.setColor(Theme.BORDER);
+        g2.drawLine(0, getHeight() - 1, getWidth(), getHeight() - 1);
+        g2.setColor(Ui.alpha(Theme.BORDER, 110));
+        g2.drawLine(0, getHeight() - 4, getWidth(), getHeight() - 4);
+        g2.dispose();
+    }
+
+    /** A short vertical hairline between the name and the readout. */
+    private static final class Rule extends JPanel {
+        private static final long serialVersionUID = 1L;
+
+        Rule() {
+            setOpaque(false);
+            setPreferredSize(new Dimension(1, 26));
+            setBackground(Theme.BORDER);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            g.setColor(Theme.BORDER);
+            g.fillRect(0, 0, 1, getHeight());
         }
     }
 

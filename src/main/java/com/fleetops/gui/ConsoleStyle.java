@@ -14,21 +14,21 @@ final class ConsoleStyle {
     /** A piece of text with a colour. */
     record Segment(String text, Color color, boolean bold) {}
 
-    private static final Color BODY = new Color(0xC9CED4);
-    private static final Color DONE = new Color(0x4C9F7A);
-    private static final Color ORANGE = new Color(0xFF8A4C);
+    private static final Color BODY = new Color(0xD3CDB8);
+    private static final Color DONE = Theme.DONE;
+    private static final Color ORANGE = new Color(0xE9783D);
 
     private static final Map<String, Color> WORDS = Map.ofEntries(
             Map.entry("VERIFIED", Theme.INFO),
             Map.entry("PLANNED", Theme.WARN),
-            Map.entry("IN_PROGRESS", Theme.ACCENT),
+            Map.entry("IN_PROGRESS", Theme.LIVE),
             Map.entry("COMPLETED", DONE),
-            Map.entry("CREATED", Theme.ACCENT),
+            Map.entry("CREATED", Theme.LIVE),
             Map.entry("NEW", Theme.MUTED),
             Map.entry("REJECTED", Theme.MUTED),
             Map.entry("DUPLICATE", Theme.MUTED),
             Map.entry("FAILED", Theme.DANGER),
-            Map.entry("LOW", new Color(0x7BD389)),
+            Map.entry("LOW", new Color(0x9CB87C)),
             Map.entry("MODERATE", Theme.WARN),
             Map.entry("HIGH", ORANGE),
             Map.entry("CRITICAL", Theme.DANGER));
@@ -63,13 +63,13 @@ final class ConsoleStyle {
         return rows;
     }
 
-    /** The banner colour for a row: mint at the top fading to blue at the bottom. */
+    /** The banner colour for a row: ochre at the top fading to paper cream at the bottom, like a contour tint. */
     static Color bannerColor(int row) {
         float t = row / 5f;
         return new Color(
-                Math.round(Theme.ACCENT.getRed() + (Theme.INFO.getRed() - Theme.ACCENT.getRed()) * t),
-                Math.round(Theme.ACCENT.getGreen() + (Theme.INFO.getGreen() - Theme.ACCENT.getGreen()) * t),
-                Math.round(Theme.ACCENT.getBlue() + (Theme.INFO.getBlue() - Theme.ACCENT.getBlue()) * t));
+                Math.round(Theme.ACCENT.getRed() + (Theme.TEXT.getRed() - Theme.ACCENT.getRed()) * t),
+                Math.round(Theme.ACCENT.getGreen() + (Theme.TEXT.getGreen() - Theme.ACCENT.getGreen()) * t),
+                Math.round(Theme.ACCENT.getBlue() + (Theme.TEXT.getBlue() - Theme.ACCENT.getBlue()) * t));
     }
 
     /** Splits a piece of ordinary output into coloured segments. */
@@ -78,7 +78,7 @@ final class ConsoleStyle {
         Color line = null;
         boolean bold = false;
         if (trimmed.startsWith("Mission COMPLETED")) {
-            line = Theme.ACCENT;
+            line = Theme.LIVE;
             bold = true;
         } else if (trimmed.startsWith("Mission INCOMPLETE")) {
             line = Theme.WARN;
@@ -87,10 +87,10 @@ final class ConsoleStyle {
             line = Theme.DANGER;
             bold = true;
         } else if (trimmed.toLowerCase(Locale.ROOT).contains("area cleared")) {
-            line = Theme.ACCENT;
+            line = Theme.LIVE;
             bold = true;
         } else if (trimmed.startsWith("[") && trimmed.contains(" rescued ")) {
-            line = Theme.ACCENT;
+            line = Theme.LIVE;
         } else if (trimmed.startsWith("[") && trimmed.contains(" found ")) {
             line = Theme.WARN;
         } else if (trimmed.startsWith("Note:") || trimmed.startsWith("Dry run")) {

@@ -52,7 +52,8 @@ Then edit `.env`. The default `LLM_PROVIDER=mock` needs no key and no network. T
 | `TELEGRAM_CHANNELS` | Public channel names, used when `telegram` is a source | none |
 | `NEWS_GOOGLE_EDITION` | Google News language and country | `hl=en-CA&gl=CA&ceid=CA:en` |
 | `NEWS_TOPICS` | `flood`, `famine`, `fire`, `earthquake` (blank = all) | all four |
-| `MAP_TILES` | Map tile source: `dark` (CARTO Dark Matter) or `osm` (OpenStreetMap) | `dark` |
+| `MAP_TILES` | Map tile source: `dark` (CARTO Dark Matter, needs `CARTO_API_KEY`) or `osm` (OpenStreetMap) | `dark` |
+| `CARTO_API_KEY` | Free CARTO basemap key from [carto.com/basemaps/apikey](https://carto.com/basemaps/apikey); without it `dark` falls back to OpenStreetMap | none |
 
 ## Run
 
@@ -148,6 +149,7 @@ The design patterns used, with the classes that implement them, are listed in
 
 - **"LLM_PROVIDER=gemini needs LLM_API_KEY"** - put your key in `.env`, or use `LLM_PROVIDER=mock`.
 - **Could not open the database** - run `mvn compile` once so Maven downloads the H2 driver, or set `DB_URL=memory`.
+- **"API KEY REQUIRED" squares on the map** - CARTO no longer serves tiles without a key. Request a free one at [carto.com/basemaps/apikey](https://carto.com/basemaps/apikey), put it in `.env` as `CARTO_API_KEY=...` and restart. Until then the app shows OpenStreetMap, or set `MAP_TILES=osm`.
 - **The map is grey** - tiles come from CARTO / OpenStreetMap and need internet access. Incidents and units are still drawn.
 - **Plan fails with "no drone is ready"** - the units are busy or low on battery; press **Reset fleet** (GUI) or start a new `run` (CLI), which begins with a fresh fleet.
 - **Start fresh** - run `reset` (CLI) or press **Clear finished** (GUI), or delete the `data/` folder (the local database, gitignored).

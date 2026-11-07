@@ -24,7 +24,6 @@ import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.geom.Path2D;
 import java.awt.geom.Point2D;
-import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
@@ -44,14 +43,14 @@ import org.jxmapviewer.viewer.GeoPosition;
 final class MapOverlay implements Painter<JXMapViewer> {
 
     /** Radius in pixels of the round marker drawn at the centre of every incident. */
-    static final int MARKER_RADIUS = 17;
+    static final int MARKER_RADIUS = 16;
     private static final int LABEL_LIMIT = 12;
     /** JXMapViewer counts zoom the other way round: at this level or closer the pictures are used. */
     private static final int SPRITE_ZOOM = 12;
     private static final int SCALE = 2;
 
     private static final BufferedImage FOUND_PERSON = Sprites.person(Theme.DANGER);
-    private static final BufferedImage RESCUED_PERSON = Sprites.person(Theme.ACCENT);
+    private static final BufferedImage RESCUED_PERSON = Sprites.person(Theme.LIVE);
 
     private final Supplier<List<Incident>> incidents;
     private final Supplier<SimulationEngine> engine;
@@ -143,7 +142,7 @@ final class MapOverlay implements Painter<JXMapViewer> {
         return map.getTileFactory().geoToPixel(new GeoPosition(p.lat(), p.lon()), map.getZoom());
     }
 
-    /** The translucent square that shows the area an incident covers. */
+    /** The square that shows the area an incident covers: a dashed boundary, solid with corner ticks when selected. */
     private void drawArea(Graphics2D g, JXMapViewer map, Incident incident, boolean isSelected) {
         IncidentState state = incident.state();
         if (state == IncidentState.REJECTED || state == IncidentState.DUPLICATE) {
@@ -151,14 +150,29 @@ final class MapOverlay implements Painter<JXMapViewer> {
         }
         Rectangle box = boxOf(map, incident.area());
         Color base = colorOf(state);
-        g.setColor(Ui.alpha(base, state == IncidentState.COMPLETED ? 16 : 30));
+        g.setColor(Ui.alpha(base, state == IncidentState.COMPLETED ? 14 : isSelected ? 38 : 24));
         g.fill(box);
-        g.setColor(Ui.alpha(base, isSelected ? 255 : 150));
-        g.setStroke(new BasicStroke(isSelected ? 2.4f : 1.4f));
-        g.draw(box);
+        g.setColor(Ui.alpha(base, isSelected ? 255 : 170));
+        if (isSelected) {
+            g.setStroke(new BasicStroke(2f));
+            g.draw(box);
+            int t = Math.min(12, Math.max(5, box.width / 4));
+            g.setStroke(new BasicStroke(3f));
+            g.drawLine(box.x - 4, box.y - 4, box.x - 4 + t, box.y - 4);
+            g.drawLine(box.x - 4, box.y - 4, box.x - 4, box.y - 4 + t);
+            g.drawLine(box.x + box.width + 4, box.y - 4, box.x + box.width + 4 - t, box.y - 4);
+            g.drawLine(box.x + box.width + 4, box.y - 4, box.x + box.width + 4, box.y - 4 + t);
+            g.drawLine(box.x - 4, box.y + box.height + 4, box.x - 4 + t, box.y + box.height + 4);
+            g.drawLine(box.x - 4, box.y + box.height + 4, box.x - 4, box.y + box.height + 4 - t);
+            g.drawLine(box.x + box.width + 4, box.y + box.height + 4, box.x + box.width + 4 - t, box.y + box.height + 4);
+            g.drawLine(box.x + box.width + 4, box.y + box.height + 4, box.x + box.width + 4, box.y + box.height + 4 - t);
+        } else {
+            g.setStroke(new BasicStroke(1.4f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, new float[] {6f, 4f}, 0f));
+            g.draw(box);
+        }
     }
 
-    /** A round badge at the centre: the disaster's icon, a people count and (when room) a name tag. */
+    /** A square survey sign at the centre: the disaster's symbol, a people count tag and (when room) a name. */
     private void drawMarker(Graphics2D g, JXMapViewer map, Incident incident, boolean isSelected, boolean label) {
         IncidentState state = incident.state();
         if (state == IncidentState.REJECTED || state == IncidentState.DUPLICATE) {
@@ -170,59 +184,59 @@ final class MapOverlay implements Painter<JXMapViewer> {
         Color base = colorOf(state);
         int r = MARKER_RADIUS;
 
-        if (isSelected) {
-            for (int i = 4; i >= 1; i--) {
-                g.setColor(Ui.alpha(base, 18 * (5 - i)));
-                g.setStroke(new BasicStroke(i * 3f));
-                g.drawOval(cx - r, cy - r, 2 * r, 2 * r);
-            }
-        }
-        g.setColor(new Color(0x15, 0x18, 0x1C, 240));
-        g.fillOval(cx - r, cy - r, 2 * r, 2 * r);
+        g.setColor(new Color(0x0A, 0x12, 0x1A, 245));
+        g.fillRect(cx - r, cy - r, 2 * r, 2 * r);
         g.setColor(base);
-        g.setStroke(new BasicStroke(isSelected ? 3f : 2.2f));
-        g.drawOval(cx - r, cy - r, 2 * r, 2 * r);
-        IncidentList.paintTypeIcon(g, incident.type(), cx, cy, r - 3, IncidentList.typeColor(incident.type()));
+        g.setStroke(new BasicStroke(isSelected ? 3f : 2f));
+        g.drawRect(cx - r, cy - r, 2 * r, 2 * r);
+        IncidentList.paintTypeIcon(g, incident.type(), cx, cy, r - 5, IncidentList.typeColor(incident.type()));
 
-        // people badge, top right
+        // people tag, top right, on the severity colour
         String count = incident.estimatedPeople() > 99 ? "99+" : String.valueOf(incident.estimatedPeople());
-        g.setFont(Theme.ui(Font.BOLD, 10f));
+        g.setFont(Theme.monoBold(10f));
         FontMetrics fm = g.getFontMetrics();
-        int bw = Math.max(18, fm.stringWidth(count) + 10);
-        int bh = 17;
-        int bx = cx + r - bw / 2 - 1;
-        int by = cy - r - bh / 2 + 3;
-        g.setColor(new Color(0x15, 0x18, 0x1C));
-        g.fill(new RoundRectangle2D.Float(bx - 2, by - 2, bw + 4, bh + 4, bh + 4, bh + 4));
+        int bw = Math.max(18, fm.stringWidth(count) + 8);
+        int bh = 15;
+        int bx = cx + r - bw + 5;
+        int by = cy - r - bh + 5;
+        g.setColor(new Color(0x0A, 0x12, 0x1A));
+        g.fillRect(bx - 2, by - 2, bw + 4, bh + 4);
         g.setColor(IncidentList.severityColor(incident.severity()));
-        g.fill(new RoundRectangle2D.Float(bx, by, bw, bh, bh, bh));
+        g.fillRect(bx, by, bw, bh);
         g.setColor(Theme.ON_ACCENT);
         g.drawString(count, bx + (bw - fm.stringWidth(count)) / 2, by + (bh + fm.getAscent() - fm.getDescent()) / 2);
 
         if (label) {
             Rectangle box = labelBox(g, map, incident);
-            g.setFont(Theme.ui(Font.BOLD, 11f));
+            g.setFont(Theme.serif(12.5f));
             FontMetrics lf = g.getFontMetrics();
-            g.setColor(new Color(0x15, 0x18, 0x1C, 225));
-            g.fill(new RoundRectangle2D.Float(box.x, box.y, box.width, box.height, box.height, box.height));
-            g.setColor(isSelected ? base : Theme.BORDER);
-            g.setStroke(new BasicStroke(1f));
-            g.draw(new RoundRectangle2D.Float(box.x + 0.5f, box.y + 0.5f, box.width - 1, box.height - 1, box.height, box.height));
-            g.setColor(Theme.TEXT);
-            g.drawString(labelText(incident), box.x + 8, box.y + (box.height + lf.getAscent() - lf.getDescent()) / 2);
+            String text = labelText(incident);
+            int tx = box.x + (box.width - lf.stringWidth(text)) / 2;
+            int ty = box.y + (box.height + lf.getAscent() - lf.getDescent()) / 2;
+            // an ink halo keeps the name readable over any tile
+            g.setColor(new Color(0x0A, 0x12, 0x1A, 235));
+            for (int dx = -2; dx <= 2; dx++) {
+                for (int dy = -2; dy <= 2; dy++) {
+                    if (dx != 0 || dy != 0) {
+                        g.drawString(text, tx + dx, ty + dy);
+                    }
+                }
+            }
+            g.setColor(isSelected ? Theme.TEXT : new Color(0xD6D0BC));
+            g.drawString(text, tx, ty);
         }
     }
 
     private static String labelText(Incident incident) {
-        return "#" + incident.id().map(String::valueOf).orElse("?") + " " + incident.type().keyword();
+        return incident.title().length() > 26 ? incident.title().substring(0, 25).stripTrailing() + "\u2026" : incident.title();
     }
 
     /** Where an incident's name tag goes: under its marker, in world pixels. */
     private static Rectangle labelBox(Graphics2D g, JXMapViewer map, Incident incident) {
         Point2D c = toPixel(map, incident.area().center());
-        FontMetrics fm = g.getFontMetrics(Theme.ui(Font.BOLD, 11f));
-        int width = fm.stringWidth(labelText(incident)) + 16;
-        return new Rectangle((int) Math.round(c.getX()) - width / 2, (int) Math.round(c.getY()) + MARKER_RADIUS + 7, width, 20);
+        FontMetrics fm = g.getFontMetrics(Theme.serif(12.5f));
+        int width = fm.stringWidth(labelText(incident)) + 8;
+        return new Rectangle((int) Math.round(c.getX()) - width / 2, (int) Math.round(c.getY()) + MARKER_RADIUS + 6, width, 18);
     }
 
     private static Rectangle boxOf(JXMapViewer map, GeoArea area) {
@@ -241,8 +255,8 @@ final class MapOverlay implements Painter<JXMapViewer> {
             case NEW -> Theme.MUTED;
             case VERIFIED -> Theme.INFO;
             case PLANNED -> Theme.WARN;
-            case IN_PROGRESS -> Theme.ACCENT;
-            case COMPLETED -> new Color(0x4C, 0x9F, 0x7A);
+            case IN_PROGRESS -> Theme.LIVE;
+            case COMPLETED -> Theme.DONE;
             case REJECTED, DUPLICATE -> Theme.BORDER;
         };
     }
@@ -256,38 +270,43 @@ final class MapOverlay implements Painter<JXMapViewer> {
                 if (box.width < 4) {
                     continue;
                 }
-                g.setColor(Ui.alpha(Theme.INFO, 14));
+                g.setColor(Ui.alpha(Theme.INFO, 16));
                 g.fill(box);
-                g.setColor(Ui.alpha(Theme.INFO, 80));
+                g.setColor(Ui.alpha(Theme.INFO, 110));
                 g.draw(box);
             }
         }
     }
 
-    /** The rover's drive from its base to the edge of the incident, as a glowing mint line. */
+    /** The rover's drive from its base to the edge of the incident: a dashed survey line between a trig point and a stake. */
     private void drawRoute(Graphics2D g, JXMapViewer map, Mission mission) {
         Point2D a = toPixel(map, mission.plan().depot());
         Point2D b = toPixel(map, mission.plan().staging());
         Path2D line = new Path2D.Double();
         line.moveTo(a.getX(), a.getY());
         line.lineTo(b.getX(), b.getY());
-        int[] widths = {14, 9, 5};
-        int[] alphas = {22, 38, 80};
-        for (int i = 0; i < widths.length; i++) {
-            g.setColor(Ui.alpha(Theme.ACCENT, alphas[i]));
-            g.setStroke(new BasicStroke(widths[i], BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            g.draw(line);
-        }
-        g.setColor(new Color(0xC8, 0xFF, 0xE8, 230));
-        g.setStroke(new BasicStroke(1.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g.setColor(new Color(0x0A, 0x12, 0x1A, 200));
+        g.setStroke(new BasicStroke(5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER));
         g.draw(line);
-        for (Point2D end : List.of(a, b)) {
-            g.setColor(new Color(0x10, 0x12, 0x15));
-            g.fillOval((int) end.getX() - 5, (int) end.getY() - 5, 10, 10);
-            g.setColor(Theme.ACCENT);
-            g.setStroke(new BasicStroke(2f));
-            g.drawOval((int) end.getX() - 5, (int) end.getY() - 5, 10, 10);
-        }
+        g.setColor(Theme.LIVE);
+        g.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, new float[] {9f, 5f}, 0f));
+        g.draw(line);
+        // the base is a triangle (a triangulation point), the staging edge a small ringed stake
+        int ax = (int) Math.round(a.getX());
+        int ay = (int) Math.round(a.getY());
+        Polygon trig = new Polygon(new int[] {ax, ax + 7, ax - 7}, new int[] {ay - 8, ay + 5, ay + 5}, 3);
+        g.setColor(new Color(0x0A, 0x12, 0x1A));
+        g.fillPolygon(trig);
+        g.setColor(Theme.LIVE);
+        g.setStroke(new BasicStroke(2f));
+        g.drawPolygon(trig);
+        g.fillOval(ax - 1, ay - 1, 3, 3);
+        int bx = (int) Math.round(b.getX());
+        int by = (int) Math.round(b.getY());
+        g.setColor(new Color(0x0A, 0x12, 0x1A));
+        g.fillOval(bx - 5, by - 5, 10, 10);
+        g.setColor(Theme.LIVE);
+        g.drawOval(bx - 5, by - 5, 10, 10);
     }
 
     private void drawSurvivors(Graphics2D g, JXMapViewer map, IncidentZone zone, boolean pictures, double phase) {
@@ -310,7 +329,7 @@ final class MapOverlay implements Painter<JXMapViewer> {
             if (pictures) {
                 Sprites.draw(g, found ? FOUND_PERSON : RESCUED_PERSON, x, y - 2, 0, SCALE);
             } else {
-                g.setColor(found ? Theme.DANGER : Theme.ACCENT);
+                g.setColor(found ? Theme.DANGER : Theme.LIVE);
                 int r = found ? 4 : 3;
                 g.fillOval((int) x - r, (int) y - r, 2 * r, 2 * r);
             }
@@ -347,14 +366,13 @@ final class MapOverlay implements Painter<JXMapViewer> {
     private static void drawDot(Graphics2D g, Unit unit, int x, int y) {
         g.setStroke(new BasicStroke(1.5f));
         if (unit instanceof Carrier) {
-            RoundRectangle2D body = new RoundRectangle2D.Float(x - 5, y - 5, 10, 10, 4, 4);
-            g.setColor(new Color(0x1D, 0x21, 0x26));
-            g.fill(body);
-            g.setColor(Theme.ACCENT);
-            g.draw(body);
+            g.setColor(new Color(0x0A, 0x12, 0x1A));
+            g.fillRect(x - 5, y - 5, 10, 10);
+            g.setColor(Theme.LIVE);
+            g.drawRect(x - 5, y - 5, 10, 10);
         } else if (unit instanceof Helicopter) {
             Polygon diamond = new Polygon(new int[] {x, x + 6, x, x - 6}, new int[] {y - 6, y, y + 6, y}, 4);
-            g.setColor(new Color(0xB5, 0x8C, 0xFF));
+            g.setColor(Theme.ACCENT);
             g.fill(diamond);
         } else {
             g.setColor(Theme.INFO);

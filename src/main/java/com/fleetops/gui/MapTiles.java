@@ -1,13 +1,16 @@
 package com.fleetops.gui;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.Optional;
 import org.jxmapviewer.viewer.DefaultTileFactory;
 import org.jxmapviewer.viewer.TileFactory;
 import org.jxmapviewer.viewer.TileFactoryInfo;
 
 /**
  * Factory for the map's tile source, chosen by {@code MAP_TILES}: {@code dark} (CARTO's Dark Matter,
- * the default, which suits the dark interface) or {@code osm} (the standard OpenStreetMap look).
+ * the default, which suits the dark interface and needs {@code CARTO_API_KEY}) or {@code osm} (the standard OpenStreetMap look).
  * Supporting another provider means adding a case here and nothing else.
  */
 final class MapTiles {
@@ -22,9 +25,20 @@ final class MapTiles {
 
     private MapTiles() {}
 
-    /** @param name the {@code MAP_TILES} value; an unknown name gives the dark map (see {@link #isKnown}) */
-    static TileFactory create(String name) {
-        TileFactoryInfo info = isOsm(name) ? new OsmTiles() : new DarkTiles();
+    /**
+     * Whether the dark map can be used: CARTO refuses tiles without a key, so {@code dark} without
+     * one falls back to OpenStreetMap (the caller tells the user why).
+     */
+    static boolean usesOsm(String name, Optional<String> cartoKey) {
+        return isOsm(name) || cartoKey.isEmpty();
+    }
+
+    /**
+     * @param name the {@code MAP_TILES} value; an unknown name gives the dark map (see {@link #isKnown})
+     * @param cartoKey the CARTO basemap key; without it the dark map is replaced by OpenStreetMap
+     */
+    static TileFactory create(String name, Optional<String> cartoKey) {
+        TileFactoryInfo info = usesOsm(name, cartoKey) ? new OsmTiles() : new DarkTiles(cartoKey.orElseThrow());
         DefaultTileFactory factory = new DefaultTileFactory(info);
         // Tile servers ask every application to identify itself.
         factory.setUserAgent("FleetOps/0.1 (university course project)");
@@ -37,8 +51,8 @@ final class MapTiles {
     }
 
     /** The credit line the map must show for a tile source. */
-    static String attribution(String name) {
-        return isOsm(name) ? OSM_ATTRIBUTION : DARK_ATTRIBUTION;
+    static String attribution(String name, Optional<String> cartoKey) {
+        return usesOsm(name, cartoKey) ? OSM_ATTRIBUTION : DARK_ATTRIBUTION;
     }
 
     private static boolean isOsm(String name) {
@@ -67,20 +81,24 @@ final class MapTiles {
         }
     }
 
-    /** CARTO "Dark Matter" tiles (free with attribution), spread over the servers a to d. */
+    /**
+     * CARTO "Dark Matter" tiles (free with attribution and a key). The key travels in the query string
+     * of every tile request, so the address must never be logged.
+     */
     static final class DarkTiles extends TileFactoryInfo {
 
-        private static final String SERVERS = "abcd";
+        private static final String BASE = "https://basemaps.cartocdn.com/rastertiles/dark_all";
+        private final String key;
 
-        DarkTiles() {
-            super("CARTO Dark Matter", 0, MAX_ZOOM, MAX_ZOOM, 256, true, true,
-                    "https://a.basemaps.cartocdn.com/dark_all", "x", "y", "z");
+        DarkTiles(String key) {
+            super("CARTO Dark Matter", 0, MAX_ZOOM, MAX_ZOOM, 256, true, true, BASE, "x", "y", "z");
+            this.key = key;
         }
 
         @Override
         public String getTileUrl(int x, int y, int zoom) {
-            char server = SERVERS.charAt(Math.floorMod(x + y, SERVERS.length()));
-            return "https://" + server + ".basemaps.cartocdn.com/dark_all/" + (MAX_ZOOM - zoom) + "/" + x + "/" + y + ".png";
+            return BASE + "/" + (MAX_ZOOM - zoom) + "/" + x + "/" + y + ".png?key="
+                    + URLEncoder.encode(key, StandardCharsets.UTF_8);
         }
     }
 }

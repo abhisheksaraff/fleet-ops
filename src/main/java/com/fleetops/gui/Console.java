@@ -51,7 +51,7 @@ import picocli.CommandLine;
 final class Console extends JPanel {
 
     private static final long serialVersionUID = 1L;
-    private static final String PROMPT = "fleetops ❯ ";
+    private static final String PROMPT = "fleetops \u203A ";
     private static final int MAX_LINES = 2500;
     private static final int MAX_HISTORY = 200;
     private static final float FONT_SIZE = 13f;
@@ -161,11 +161,11 @@ final class Console extends JPanel {
         input.setForeground(Theme.TEXT);
         input.setCaretColor(Theme.ACCENT);
         input.setOpaque(true);
-        input.setBackground(new Color(0x0F1215));
+        input.setBackground(new Color(0x0B141D));
         input.setBorder(BorderFactory.createEmptyBorder(2, 0, 2, 0));
         input.setFocusTraversalKeysEnabled(false);
         JPanel row = new JPanel(new BorderLayout(4, 0));
-        row.setBackground(new Color(0x0F1215));
+        row.setBackground(new Color(0x0B141D));
         row.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(1, 0, 0, 0, Theme.BORDER),
                 BorderFactory.createEmptyBorder(8, 14, 8, 14)));
@@ -329,17 +329,18 @@ final class Console extends JPanel {
     }
 
     private void printBanner() {
-        List<String> rows = ConsoleStyle.banner();
-        for (int i = 0; i < rows.size(); i++) {
-            println(rows.get(i), ConsoleStyle.bannerColor(i), false, true);
-        }
+        // drawn as shapes, not text, so it looks the same whatever fonts the system has
+        pane.setCaretPosition(doc.getLength());
+        pane.insertComponent(new Banner());
+        println("", Theme.TEXT, false, true);
         println("", Theme.TEXT, false, true);
         println("mission control for heterogeneous rescue fleets", Theme.TEXT, false, true);
         AppContext app = host.app();
         println(String.format(Locale.ROOT, "db %s  ·  ai %s  ·  news %s  ·  map %s",
                 app.config().dbUrl(), app.config().llmProvider().name().toLowerCase(Locale.ROOT),
                 app.config().newsSources().stream().map(s -> s.name().toLowerCase(Locale.ROOT)).toList(),
-                app.config().mapTiles()), Theme.MUTED, false, true);
+                MapTiles.usesOsm(app.config().mapTiles(), app.config().cartoApiKey()) ? "osm" : "dark"),
+                Theme.MUTED, false, true);
         println("type help for commands, Tab completes, Up/Down walks the history", Theme.MUTED, false, true);
         println("", Theme.TEXT, false, true);
     }
@@ -471,6 +472,111 @@ final class Console extends JPanel {
             }
             trimAndScroll();
         });
+    }
+
+    /** True once the banner is on screen; used by tests. */
+    boolean hasBanner() {
+        return java.util.stream.IntStream.range(0, doc.getLength())
+                .anyMatch(i -> StyleConstants.getComponent(doc.getCharacterElement(i).getAttributes()) instanceof Banner);
+    }
+
+    /**
+     * The big FLEETOPS lettering in the style of a terminal banner: solid blocks with a double-line
+     * shadow. Every character of the text banner is drawn on a fixed grid (blocks as rectangles, box
+     * characters as double lines), so it looks the same whatever fonts the system has.
+     */
+    private static final class Banner extends javax.swing.JComponent {
+        private static final long serialVersionUID = 1L;
+        private static final int CELL_W = 9;
+        private static final int CELL_H = 17;
+        private static final int GAP = 2; // half the distance between the two lines of a double line
+        private final transient List<String> rows = ConsoleStyle.banner();
+
+        Banner() {
+            setOpaque(false);
+            setAlignmentY(0.8f);
+        }
+
+        @Override
+        public java.awt.Dimension getPreferredSize() {
+            return new java.awt.Dimension(rows.get(0).length() * CELL_W + 4, rows.size() * CELL_H + 2);
+        }
+
+        @Override
+        public java.awt.Dimension getMaximumSize() {
+            return getPreferredSize();
+        }
+
+        @Override
+        protected void paintComponent(java.awt.Graphics g) {
+            java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+            g2.setStroke(new java.awt.BasicStroke(1.4f, java.awt.BasicStroke.CAP_SQUARE, java.awt.BasicStroke.JOIN_MITER));
+            for (int r = 0; r < rows.size(); r++) {
+                String row = rows.get(r);
+                Color ink = ConsoleStyle.bannerColor(r);
+                Color shade = new Color((ink.getRed() * 5 + Theme.CONSOLE_BG.getRed() * 5) / 10 + 8,
+                        (ink.getGreen() * 5 + Theme.CONSOLE_BG.getGreen() * 5) / 10 + 6,
+                        (ink.getBlue() * 5 + Theme.CONSOLE_BG.getBlue() * 5) / 10);
+                for (int c = 0; c < row.length(); c++) {
+                    int x = c * CELL_W;
+                    int y = r * CELL_H;
+                    char ch = row.charAt(c);
+                    if (ch == '\u2588') {
+                        g2.setColor(ink);
+                        g2.fillRect(x, y, CELL_W, CELL_H);
+                    } else if (ch != ' ') {
+                        g2.setColor(shade);
+                        drawBox(g2, ch, x, y);
+                    }
+                }
+            }
+            g2.dispose();
+        }
+
+        /** Draws one of the double-line box characters used by the banner. */
+        private static void drawBox(java.awt.Graphics2D g, char ch, int x, int y) {
+            int cx = x + CELL_W / 2;
+            int cy = y + CELL_H / 2;
+            int l = x;
+            int rgt = x + CELL_W;
+            int t = y;
+            int b = y + CELL_H;
+            switch (ch) {
+                case '\u2550' -> { // horizontal
+                    g.drawLine(l, cy - GAP, rgt, cy - GAP);
+                    g.drawLine(l, cy + GAP, rgt, cy + GAP);
+                }
+                case '\u2551' -> { // vertical
+                    g.drawLine(cx - GAP, t, cx - GAP, b);
+                    g.drawLine(cx + GAP, t, cx + GAP, b);
+                }
+                case '\u2554' -> { // down and right
+                    g.drawLine(rgt, cy - GAP, cx - GAP, cy - GAP);
+                    g.drawLine(cx - GAP, cy - GAP, cx - GAP, b);
+                    g.drawLine(rgt, cy + GAP, cx + GAP, cy + GAP);
+                    g.drawLine(cx + GAP, cy + GAP, cx + GAP, b);
+                }
+                case '\u2557' -> { // down and left
+                    g.drawLine(l, cy - GAP, cx + GAP, cy - GAP);
+                    g.drawLine(cx + GAP, cy - GAP, cx + GAP, b);
+                    g.drawLine(l, cy + GAP, cx - GAP, cy + GAP);
+                    g.drawLine(cx - GAP, cy + GAP, cx - GAP, b);
+                }
+                case '\u255A' -> { // up and right
+                    g.drawLine(cx - GAP, t, cx - GAP, cy + GAP);
+                    g.drawLine(cx - GAP, cy + GAP, rgt, cy + GAP);
+                    g.drawLine(cx + GAP, t, cx + GAP, cy - GAP);
+                    g.drawLine(cx + GAP, cy - GAP, rgt, cy - GAP);
+                }
+                case '\u255D' -> { // up and left
+                    g.drawLine(cx + GAP, t, cx + GAP, cy + GAP);
+                    g.drawLine(cx + GAP, cy + GAP, l, cy + GAP);
+                    g.drawLine(cx - GAP, t, cx - GAP, cy - GAP);
+                    g.drawLine(cx - GAP, cy - GAP, l, cy - GAP);
+                }
+                default -> { }
+            }
+        }
     }
 
     private void println(String text, Color color, boolean bold, boolean newline) {

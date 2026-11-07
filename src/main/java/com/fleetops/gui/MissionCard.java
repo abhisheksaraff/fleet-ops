@@ -18,7 +18,6 @@ import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.RenderingHints;
 import java.awt.event.MouseAdapter;
-import java.awt.geom.RoundRectangle2D;
 import java.util.Locale;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -49,9 +48,10 @@ final class MissionCard extends JPanel {
     private final Chip severityChip = new Chip();
     private final Chip stateChip = new Chip();
     private final JLabel facts = new JLabel();
+    private final JLabel grid = Ui.readout(" ");
     private final Wrapped summary = new Wrapped(308, 5);
     private final JPanel progressBox = new JPanel();
-    private final JLabel progressCaption = Ui.caption("Mission");
+    private final JLabel progressCaption = Ui.readout("mission");
     private final Bar bar = new Bar();
     private final JLabel progressMain = new JLabel();
     private final JLabel progressSub = new JLabel();
@@ -75,21 +75,21 @@ final class MissionCard extends JPanel {
         this.onCancel = onCancel;
         setOpaque(false);
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
-        setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
+        setBorder(BorderFactory.createEmptyBorder(18, 18, 18, 18));
         // The card swallows mouse input so a drag on it does not pan the map underneath.
         addMouseListener(new MouseAdapter() { });
         addMouseMotionListener(new MouseAdapter() { });
         addMouseWheelListener(e -> { });
 
-        title.setFont(Theme.ui(Font.BOLD, 15f));
+        title.setFont(Theme.serif(17f));
         title.setForeground(Theme.TEXT);
-        kind.setFont(Theme.ui(Font.PLAIN, 12f));
+        kind.setFont(Theme.mono(11f));
         kind.setForeground(Theme.MUTED);
         facts.setFont(Theme.ui(Font.PLAIN, 12f));
         facts.setForeground(Theme.MUTED);
         summary.setFont(Theme.ui(Font.PLAIN, 12f));
-        summary.setForeground(new Color(0xB4BAC2));
-        progressMain.setFont(Theme.ui(Font.BOLD, 22f));
+        summary.setForeground(new Color(0xC4BFAC));
+        progressMain.setFont(Theme.serif(18f));
         progressMain.setForeground(Theme.TEXT);
         progressSub.setFont(Theme.ui(Font.PLAIN, 12f));
         progressSub.setForeground(Theme.MUTED);
@@ -116,10 +116,10 @@ final class MissionCard extends JPanel {
 
         progressBox.setOpaque(false);
         progressBox.setLayout(new BoxLayout(progressBox, BoxLayout.Y_AXIS));
-        progressBox.add(progressCaption);
-        progressBox.add(Box.createVerticalStrut(4));
         progressBox.add(progressMain);
-        progressBox.add(Box.createVerticalStrut(6));
+        progressBox.add(Box.createVerticalStrut(2));
+        progressBox.add(progressCaption);
+        progressBox.add(Box.createVerticalStrut(7));
         progressBox.add(bar);
         progressBox.add(Box.createVerticalStrut(8));
         progressBox.add(progressSub);
@@ -144,6 +144,8 @@ final class MissionCard extends JPanel {
         add(chips);
         add(Box.createVerticalStrut(12));
         add(facts);
+        add(Box.createVerticalStrut(2));
+        add(grid);
         add(Box.createVerticalStrut(8));
         add(summary);
         add(Box.createVerticalStrut(14));
@@ -236,12 +238,12 @@ final class MissionCard extends JPanel {
         shownState = incident.state();
         badge.type = incident.type();
         title.setText(incident.title());
-        kind.setText(titleCase(incident.type().keyword()) + " · #" + incident.id().map(String::valueOf).orElse("?"));
+        kind.setText(incident.type().keyword() + " #" + incident.id().map(String::valueOf).orElse("?"));
         severityChip.set(incident.severity().name(), IncidentList.severityColor(incident.severity()));
         stateChip.set(IncidentList.stateChip(incident.state())[0], IncidentList.stateColor(incident.state()));
-        facts.setText(String.format(Locale.ROOT, "About %d people · %.1f km square · %.3f, %.3f",
-                incident.estimatedPeople(), incident.area().sideKm(),
-                incident.area().center().lat(), incident.area().center().lon()));
+        facts.setText(String.format(Locale.ROOT, "About %d people \u00B7 %.1f km square",
+                incident.estimatedPeople(), incident.area().sideKm()));
+        grid.setText(IncidentList.gridRef(incident));
         String text = incident.summary() == null ? "" : incident.summary().strip();
         summary.setText(text);
         summary.setVisible(!text.isEmpty());
@@ -271,18 +273,18 @@ final class MissionCard extends JPanel {
         if (mission.isFinished()) {
             MissionReport report = mission.report().orElse(null);
             accent = switch (mission.status()) {
-                case COMPLETED -> Theme.ACCENT;
+                case COMPLETED -> Theme.DONE;
                 case INCOMPLETE -> Theme.WARN;
                 default -> Theme.DANGER;
             };
-            progressCaption.setText("MISSION " + mission.status());
+            progressCaption.setText("mission " + mission.status().toString().toLowerCase(Locale.ROOT));
             main = rescued + " / " + total + " rescued";
             sub = report == null ? "" : String.format(Locale.ROOT, "%.1f min simulated · %d never found",
                     report.seconds() / 60.0, report.notFound());
             units = "";
         } else {
-            accent = Theme.ACCENT;
-            progressCaption.setText("MISSION RUNNING");
+            accent = Theme.LIVE;
+            progressCaption.setText("mission running");
             main = rescued + " / " + total + " rescued";
             double minutes = Math.max(0, nowSeconds - mission.startedAtSeconds()) / 60.0;
             sub = String.format(Locale.ROOT, "%d found · %d still hidden · %.1f min", found, hidden, minutes);
@@ -321,24 +323,25 @@ final class MissionCard extends JPanel {
         return word.isEmpty() ? word : Character.toUpperCase(word.charAt(0)) + word.substring(1);
     }
 
+    /** The card is a title block: ink ground with a double hairline frame, as on a survey sheet. */
     @Override
     protected void paintComponent(Graphics g) {
         Graphics2D g2 = (Graphics2D) g.create();
-        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
-        RoundRectangle2D shape = new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), 24, 24);
-        g2.setColor(new Color(0x15, 0x18, 0x1C, 244));
-        g2.fill(shape);
-        g2.setColor(Theme.BORDER);
+        g2.setColor(new Color(0x0A, 0x12, 0x1A, 245));
+        g2.fillRect(0, 0, getWidth(), getHeight());
+        g2.setColor(new Color(0x4A, 0x5E, 0x70));
         g2.setStroke(new BasicStroke(1f));
-        g2.draw(new RoundRectangle2D.Float(0.5f, 0.5f, getWidth() - 1, getHeight() - 1, 24, 24));
+        g2.drawRect(0, 0, getWidth() - 1, getHeight() - 1);
+        g2.setColor(Theme.BORDER);
+        g2.drawRect(4, 4, getWidth() - 9, getHeight() - 9);
         g2.dispose();
         super.paintComponent(g);
     }
 
     // ---- small parts ----------------------------------------------------------------------------
 
-    /** The round disaster icon next to the title. */
+    /** The disaster's symbol in a square frame, next to the title. */
     private static final class Badge extends JComponent {
         private static final long serialVersionUID = 1L;
         private transient com.fleetops.domain.incident.IncidentType type = com.fleetops.domain.incident.IncidentType.FLOOD;
@@ -351,12 +354,15 @@ final class MissionCard extends JPanel {
         @Override
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
-            IncidentList.paintTypeIcon(g2, type, 22, 22, 22, IncidentList.typeColor(type));
+            Color c = IncidentList.typeColor(type);
+            g2.setColor(Ui.alpha(c, 150));
+            g2.drawRect(0, 0, 43, 43);
+            IncidentList.paintTypeIcon(g2, type, 22, 22, 18, c);
             g2.dispose();
         }
     }
 
-    /** A small rounded label: severity or state. */
+    /** Severity or state: a square swatch and a word, no pill. */
     private static final class Chip extends JComponent {
         private static final long serialVersionUID = 1L;
         private String text = "";
@@ -371,21 +377,19 @@ final class MissionCard extends JPanel {
 
         @Override
         public Dimension getPreferredSize() {
-            FontMetrics fm = getFontMetrics(Theme.ui(Font.BOLD, 10f));
-            return new Dimension(fm.stringWidth(text) + 20, 20);
+            FontMetrics fm = getFontMetrics(Theme.monoBold(10.5f));
+            return new Dimension(fm.stringWidth(text) + 16, 18);
         }
 
         @Override
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-            g2.setColor(Ui.alpha(color, 40));
-            g2.fill(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), getHeight(), getHeight()));
             g2.setColor(color);
-            g2.setFont(Theme.ui(Font.BOLD, 10f));
+            g2.fillRect(0, getHeight() / 2 - 3, 7, 7);
+            g2.setFont(Theme.monoBold(10.5f));
             FontMetrics fm = g2.getFontMetrics();
-            g2.drawString(text, 10, (getHeight() + fm.getAscent() - fm.getDescent()) / 2);
+            g2.drawString(text, 14, (getHeight() + fm.getAscent() - fm.getDescent()) / 2);
             g2.dispose();
         }
     }
@@ -395,7 +399,7 @@ final class MissionCard extends JPanel {
         private static final long serialVersionUID = 1L;
         private double rescued;
         private double found;
-        private Color color = Theme.ACCENT;
+        private Color color = Theme.LIVE;
 
         void set(double rescuedShare, double foundShare, Color accent) {
             if (rescued != rescuedShare || found != foundShare || !color.equals(accent)) {
@@ -408,26 +412,27 @@ final class MissionCard extends JPanel {
 
         @Override
         public Dimension getPreferredSize() {
-            return new Dimension(100, 8);
+            return new Dimension(100, 6);
         }
 
         @Override
         public Dimension getMaximumSize() {
-            return new Dimension(Integer.MAX_VALUE, 8);
+            return new Dimension(Integer.MAX_VALUE, 6);
         }
 
         @Override
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             int w = getWidth();
             int h = getHeight();
             g2.setColor(Theme.RAISED);
-            g2.fill(new RoundRectangle2D.Float(0, 0, w, h, h, h));
-            g2.setColor(Ui.alpha(color, 70));
-            g2.fill(new RoundRectangle2D.Float(0, 0, (float) (w * Math.min(1, found)), h, h, h));
+            g2.fillRect(0, 0, w, h);
+            g2.setColor(Ui.alpha(color, 80));
+            g2.fillRect(0, 0, (int) (w * Math.min(1, found)), h);
             g2.setColor(color);
-            g2.fill(new RoundRectangle2D.Float(0, 0, (float) (w * Math.min(1, rescued)), h, h, h));
+            g2.fillRect(0, 0, (int) (w * Math.min(1, rescued)), h);
+            g2.setColor(Theme.BORDER);
+            g2.drawRect(0, 0, w - 1, h - 1);
             g2.dispose();
         }
     }

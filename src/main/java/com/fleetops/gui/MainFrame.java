@@ -29,6 +29,7 @@ import java.util.prefs.Preferences;
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
+import javax.swing.JComponent;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -55,7 +56,7 @@ final class MainFrame extends JFrame {
 
     private static final long serialVersionUID = 1L;
     private static final int TIMER_MS = 40;
-    private static final double DEPOT_KM = 30.0;
+    private static final double DEPOT_KM = 8.0;
     /** Beyond this the rover could not reach an incident within the safety gate's service area. */
     private static final double RELOCATE_KM = SafetyPolicy.DEFAULT_SERVICE_RADIUS_KM * 0.6;
     private static final long SEED = 42;
@@ -86,6 +87,7 @@ final class MainFrame extends JFrame {
     private transient MissionControl pendingControl;
     private Console console;
     private final JLabel status = new JLabel(" ");
+    private HeaderBar header;
     private Workspace workspace;
 
     private final JButton scanButton = new JButton("Scan news");
@@ -113,7 +115,8 @@ final class MainFrame extends JFrame {
         app.keepOpen(); // the console runs commands that close the context they are given
         overlay = new MapOverlay(incidentList::all, () -> engineForMap, this::selectedIncident,
                 () -> rig == null ? List.of() : rig.control().activeMissions());
-        map = new MapPanel(MapTiles.create(app.config().mapTiles()), MapTiles.attribution(app.config().mapTiles()),
+        map = new MapPanel(MapTiles.create(app.config().mapTiles(), app.config().cartoApiKey()),
+                MapTiles.attribution(app.config().mapTiles(), app.config().cartoApiKey()),
                 incidentList::all, overlay);
         map.setCard(card);
         map.onSelect(this::selectFromMap);
@@ -126,6 +129,10 @@ final class MainFrame extends JFrame {
         wireActions();
         if (!MapTiles.isKnown(app.config().mapTiles())) {
             appendLog("MAP_TILES='" + app.config().mapTiles() + "' is not supported; using the dark map (use dark or osm).");
+        }
+        if (!"osm".equalsIgnoreCase(app.config().mapTiles().strip()) && app.config().cartoApiKey().isEmpty()) {
+            appendLog("The dark map needs a free CARTO key: set CARTO_API_KEY in .env (carto.com/basemaps/apikey). "
+                    + "Showing OpenStreetMap for now.");
         }
 
         speed.setSelectedItem(300);
@@ -169,7 +176,7 @@ final class MainFrame extends JFrame {
         JPanel head = new JPanel();
         head.setOpaque(false);
         head.setLayout(new BoxLayout(head, BoxLayout.Y_AXIS));
-        head.add(Ui.caption("Incidents"));
+        head.add(Ui.heading("Incidents"));
         head.add(javax.swing.Box.createVerticalStrut(8));
         head.add(actions);
         head.add(javax.swing.Box.createVerticalStrut(10));
@@ -183,33 +190,29 @@ final class MainFrame extends JFrame {
         missionRow.add(abortButton);
         missionRow.add(abortAllButton);
 
-        JPanel fleetRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        JPanel fleetRow = new JPanel(new GridLayout(1, 4, 8, 0));
         fleetRow.setOpaque(false);
-        fleetRow.add(Ui.muted("Rovers"));
-        fleetRow.add(rovers);
-        fleetRow.add(Ui.muted("Drones each"));
-        fleetRow.add(drones);
-        fleetRow.add(Ui.muted("Helicopters"));
-        fleetRow.add(helicopters);
+        fleetRow.add(labelled("Rovers", rovers));
+        fleetRow.add(labelled("Drones each", drones));
+        fleetRow.add(labelled("Helicopters", helicopters));
+        fleetRow.add(labelled("Speed (x)", speed));
 
-        JPanel speedRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        speedRow.setOpaque(false);
-        speedRow.add(Ui.muted("Simulation speed"));
-        speedRow.add(speed);
-        speedRow.add(Ui.muted("x real time"));
-        speedRow.add(resetButton);
+        JPanel fleetHead = Ui.heading("Fleet");
+        resetButton.putClientProperty(FlatClientProperties.STYLE,
+                "arc:3; borderWidth:1; focusWidth:0; background:#0E1823; foreground:#EBE4D0; borderColor:#3A4D5E"
+                        + "; hoverBackground:#172736; pressedBackground:#1E3144; margin:1,8,1,8"
+                        + "; disabledBackground:#101B26; disabledBorderColor:#1D2B38; disabledText:#5B6670");
+        fleetHead.add(resetButton, BorderLayout.EAST);
 
         JPanel foot = new JPanel();
         foot.setOpaque(false);
         foot.setLayout(new BoxLayout(foot, BoxLayout.Y_AXIS));
-        foot.add(javax.swing.Box.createVerticalStrut(10));
+        foot.add(javax.swing.Box.createVerticalStrut(8));
         foot.add(missionRow);
-        foot.add(javax.swing.Box.createVerticalStrut(14));
-        foot.add(Ui.caption("Fleet"));
+        foot.add(javax.swing.Box.createVerticalStrut(10));
+        foot.add(fleetHead);
         foot.add(javax.swing.Box.createVerticalStrut(6));
         foot.add(fleetRow);
-        foot.add(javax.swing.Box.createVerticalStrut(10));
-        foot.add(speedRow);
         for (java.awt.Component c : foot.getComponents()) {
             ((javax.swing.JComponent) c).setAlignmentX(0f);
         }
@@ -226,7 +229,9 @@ final class MainFrame extends JFrame {
         console = new Console(new ConsoleHost());
         JPanel consolePanel = new JPanel(new BorderLayout());
         consolePanel.setBackground(Theme.CONSOLE_BG);
-        JLabel consoleTitle = Ui.caption("Console");
+        JLabel consoleTitle = new JLabel("Console");
+        consoleTitle.setFont(Theme.serif(14f));
+        consoleTitle.setForeground(Theme.TEXT);
         JLabel consoleHint = new JLabel("scan \u00B7 incidents \u00B7 plan \u00B7 launch \u00B7 focus \u00B7 help");
         consoleHint.setForeground(Theme.MUTED);
         consoleHint.setFont(Theme.mono(11f));
@@ -239,9 +244,10 @@ final class MainFrame extends JFrame {
         consolePanel.add(console, BorderLayout.CENTER);
 
         workspace = new Workspace(sidebar, map, consolePanel, Preferences.userNodeForPackage(MainFrame.class));
-        HeaderBar header = new HeaderBar(workspace);
+        header = new HeaderBar(workspace);
 
         status.setForeground(Theme.MUTED);
+        status.setFont(Theme.mono(11f));
         status.setBorder(BorderFactory.createEmptyBorder(4, 14, 5, 14));
         JPanel statusBar = new JPanel(new BorderLayout());
         statusBar.setBackground(Theme.PANEL);
@@ -255,6 +261,17 @@ final class MainFrame extends JFrame {
         add(header, BorderLayout.NORTH);
         add(workspace, BorderLayout.CENTER);
         add(statusBar, BorderLayout.SOUTH);
+    }
+
+    /** A small label over a control. */
+    private static JPanel labelled(String text, JComponent control) {
+        JPanel box = new JPanel(new BorderLayout(0, 3));
+        box.setOpaque(false);
+        JLabel label = Ui.muted(text);
+        label.setFont(Theme.ui(Font.PLAIN, 12f));
+        box.add(label, BorderLayout.NORTH);
+        box.add(control, BorderLayout.CENTER);
+        return box;
     }
 
     private void wireActions() {
@@ -334,6 +351,9 @@ final class MainFrame extends JFrame {
     // ---- simulation clock -----------------------------------------------------------------------
 
     private void onTimer() {
+        if (header != null) {
+            header.setReadout(map.readout());
+        }
         if (rig == null || busy) {
             return;
         }

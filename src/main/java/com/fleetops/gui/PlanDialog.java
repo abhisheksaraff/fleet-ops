@@ -14,7 +14,6 @@ import java.awt.GridLayout;
 import java.awt.RenderingHints;
 import java.awt.Window;
 import java.awt.event.KeyEvent;
-import java.awt.geom.RoundRectangle2D;
 import java.util.Locale;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -51,12 +50,12 @@ final class PlanDialog {
         // ---- heading -----------------------------------------------------------------------------
         Wrapped name = new Wrapped(580, 2);
         name.setText(incident.title());
-        name.setFont(Theme.ui(Font.BOLD, 17f));
+        name.setFont(Theme.serif(18f));
         name.setForeground(Theme.TEXT);
         JLabel sub = new JLabel(String.format(Locale.ROOT, "%s · %s · about %d people · planned by %s",
                 titleCase(incident.type().keyword()), titleCase(incident.severity().name()),
                 incident.estimatedPeople(), plan.decision().plannedBy()));
-        sub.setFont(Theme.ui(Font.PLAIN, 12f));
+        sub.setFont(Theme.mono(11f));
         sub.setForeground(Theme.MUTED);
         JPanel names = new JPanel();
         names.setOpaque(false);
@@ -84,12 +83,12 @@ final class PlanDialog {
         body.setLayout(new BoxLayout(body, BoxLayout.Y_AXIS));
         body.add(left(tiles));
         body.add(Box.createVerticalStrut(14));
-        body.add(left(Ui.caption("Why this plan")));
+        body.add(left(Ui.heading("Why this plan")));
         body.add(Box.createVerticalStrut(4));
         Wrapped why = new Wrapped(640, 4);
         why.setText(plan.decision().rationale());
         why.setFont(Theme.ui(Font.PLAIN, 13f));
-        why.setForeground(new Color(0xC4CAD1));
+        why.setForeground(new Color(0xCFC9B5));
         body.add(left(why));
         for (String note : plan.notes()) {
             body.add(Box.createVerticalStrut(6));
@@ -100,7 +99,7 @@ final class PlanDialog {
             body.add(left(n));
         }
         body.add(Box.createVerticalStrut(14));
-        body.add(left(Ui.caption("Full plan")));
+        body.add(left(Ui.heading("Full plan")));
         body.add(Box.createVerticalStrut(4));
         JTextArea text = new JTextArea(plan.describe(), 7, 56);
         text.setEditable(false);
@@ -176,14 +175,12 @@ final class PlanDialog {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-            g2.setColor(Theme.RAISED);
-            g2.fill(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), 16, 16));
             g2.setColor(Theme.BORDER);
-            g2.draw(new RoundRectangle2D.Float(0.5f, 0.5f, getWidth() - 1, getHeight() - 1, 16, 16));
-            g2.setFont(Theme.ui(Font.BOLD, 17f));
+            g2.drawRect(0, 0, getWidth() - 1, getHeight() - 1);
+            g2.setFont(Theme.serif(18f));
             g2.setColor(Theme.TEXT);
-            g2.drawString(fit(g2, value, getWidth() - 20), 12, 27);
-            g2.setFont(Theme.ui(Font.PLAIN, 11f));
+            g2.drawString(fit(g2, value, getWidth() - 20), 12, 28);
+            g2.setFont(Theme.mono(10.5f));
             g2.setColor(Theme.MUTED);
             g2.drawString(caption, 12, 47);
             g2.dispose();
@@ -216,7 +213,10 @@ final class PlanDialog {
         @Override
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
-            IncidentList.paintTypeIcon(g2, incident.type(), 24, 24, 24, IncidentList.typeColor(incident.type()));
+            Color c = IncidentList.typeColor(incident.type());
+            g2.setColor(Ui.alpha(c, 150));
+            g2.drawRect(0, 0, 47, 47);
+            IncidentList.paintTypeIcon(g2, incident.type(), 24, 24, 20, c);
             g2.dispose();
         }
     }

@@ -30,6 +30,7 @@ public final class AppConfig {
     public static final String KEY_LLM_BASE_URL = "LLM_BASE_URL";
     public static final String KEY_DB_URL = "DB_URL";
     public static final String KEY_MAP_TILES = "MAP_TILES";
+    public static final String KEY_CARTO_API_KEY = "CARTO_API_KEY";
     public static final String KEY_DB_USER = "DB_USER";
     public static final String KEY_DB_PASSWORD = "DB_PASSWORD";
     public static final String KEY_NEWS_SOURCES = "NEWS_SOURCES";
@@ -49,6 +50,8 @@ public final class AppConfig {
 
     /** The value shipped in {@code .env.example}; it is treated as "no key". */
     public static final String PLACEHOLDER_API_KEY = "YOUR_LOCAL_API_KEY_HERE";
+    /** The value shipped in {@code .env.example} for the CARTO key; also treated as "no key". */
+    public static final String PLACEHOLDER_CARTO_KEY = "YOUR_CARTO_KEY_HERE";
 
     private final LlmProviderType llmProvider;
     private final String llmApiKey; // may be null
@@ -56,6 +59,7 @@ public final class AppConfig {
     private final String llmBaseUrl;
     private final String dbUrl;
     private final String mapTiles;
+    private final String cartoApiKey; // may be null
     private final String dbUser;
     private final String dbPassword; // may be empty, never printed
     private final List<NewsSourceType> newsSources;
@@ -70,6 +74,7 @@ public final class AppConfig {
             String llmBaseUrl,
             String dbUrl,
             String mapTiles,
+            String cartoApiKey,
             String dbUser,
             String dbPassword,
             List<NewsSourceType> newsSources,
@@ -82,6 +87,7 @@ public final class AppConfig {
         this.llmBaseUrl = llmBaseUrl;
         this.dbUrl = dbUrl;
         this.mapTiles = mapTiles;
+        this.cartoApiKey = cartoApiKey;
         this.dbUser = dbUser;
         this.dbPassword = dbPassword;
         this.newsSources = newsSources;
@@ -132,12 +138,17 @@ public final class AppConfig {
                 orDefault(pick(KEY_LLM_BASE_URL, environment, fileValues), DEFAULT_LLM_BASE_URL),
                 orDefault(pick(KEY_DB_URL, environment, fileValues), DEFAULT_DB_URL),
                 orDefault(pick(KEY_MAP_TILES, environment, fileValues), DEFAULT_MAP_TILES),
+                cartoKey(pick(KEY_CARTO_API_KEY, environment, fileValues)),
                 orDefault(pick(KEY_DB_USER, environment, fileValues), DEFAULT_DB_USER),
                 orDefault(pick(KEY_DB_PASSWORD, environment, fileValues), ""),
                 sources,
                 channels,
                 orDefault(pick(KEY_NEWS_GOOGLE_EDITION, environment, fileValues), DEFAULT_NEWS_GOOGLE_EDITION),
                 parseTopics(pick(KEY_NEWS_TOPICS, environment, fileValues)));
+    }
+
+    private static String cartoKey(String raw) {
+        return raw == null || raw.isBlank() || raw.equals(PLACEHOLDER_CARTO_KEY) ? null : raw.strip();
     }
 
     public LlmProviderType llmProvider() {
@@ -162,6 +173,11 @@ public final class AppConfig {
 
     public String mapTiles() {
         return mapTiles;
+    }
+
+    /** The CARTO basemap key the dark map needs; empty when none is set. Keep it out of logs and screens. */
+    public Optional<String> cartoApiKey() {
+        return Optional.ofNullable(cartoApiKey);
     }
 
     public String dbUser() {
@@ -204,6 +220,7 @@ public final class AppConfig {
                 "Database URL : " + dbUrl,
                 "Database user: " + dbUser + (dbPassword.isEmpty() ? " (no password)" : " (password set)"),
                 "Map tiles    : " + mapTiles,
+                "CARTO key    : " + (cartoApiKey != null ? "set" : "not set"),
                 "News sources : " + newsSources.stream().map(t -> t.name().toLowerCase(Locale.ROOT)).toList(),
                 "Telegram     : " + (telegramChannels.isEmpty() ? "(none)" : telegramChannels.size() + " channel(s)"),
                 "News topics  : " + newsTopics.stream().map(IncidentType::keyword).toList());
