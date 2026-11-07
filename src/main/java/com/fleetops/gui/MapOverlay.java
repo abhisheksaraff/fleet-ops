@@ -262,9 +262,19 @@ final class MapOverlay implements Painter<JXMapViewer> {
         };
     }
 
-    /** The squares each drone of a running mission will search, drawn very faintly. */
+    /** The squares each drone of a running mission will search, and the circles its robodogs walk, drawn very faintly. */
     private void drawSweeps(Graphics2D g, JXMapViewer map, Mission mission) {
         g.setStroke(new BasicStroke(1f));
+        for (GeoArea circle : mission.plan().robodogSweeps().values()) {
+            Rectangle box = boxOf(map, circle);
+            if (box.width < 4) {
+                continue;
+            }
+            g.setColor(Ui.alpha(Theme.WARN, 22));
+            g.fillOval(box.x, box.y, box.width, box.height);
+            g.setColor(Ui.alpha(Theme.WARN, 130));
+            g.drawOval(box.x, box.y, box.width, box.height);
+        }
         for (List<GeoArea> cells : mission.plan().sweeps().values()) {
             for (GeoArea cell : cells) {
                 Rectangle box = boxOf(map, cell);
@@ -356,6 +366,9 @@ final class MapOverlay implements Painter<JXMapViewer> {
             Sprites.draw(g, Sprites.helicopter(), x, y, heading, SCALE);
             Sprites.helicopterRotors(g, x, y, heading, SCALE, flying ? phase : 0);
             animating |= flying;
+        } else if (unit instanceof Robodog) {
+            Sprites.draw(g, Sprites.robodog(), x, y, heading, SCALE);
+            animating |= flying;
         } else {
             Sprites.draw(g, Sprites.drone(), x, y, heading, SCALE);
             Sprites.droneRotors(g, x, y, heading, SCALE, phase);
@@ -375,6 +388,9 @@ final class MapOverlay implements Painter<JXMapViewer> {
             Polygon diamond = new Polygon(new int[] {x, x + 6, x, x - 6}, new int[] {y - 6, y, y + 6, y}, 4);
             g.setColor(Theme.ACCENT);
             g.fill(diamond);
+        } else if (unit instanceof Robodog) {
+            g.setColor(Theme.WARN);
+            g.fillRect(x - 3, y - 3, 6, 6);
         } else {
             g.setColor(Theme.INFO);
             g.fillOval(x - 3, y - 3, 6, 6);

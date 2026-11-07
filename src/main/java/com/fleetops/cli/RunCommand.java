@@ -43,6 +43,9 @@ final class RunCommand extends AbstractAppCommand {
     @Option(names = "--drones", defaultValue = "6", description = "Drones on each rover (default: ${DEFAULT-VALUE}).")
     int drones;
 
+    @Option(names = "--robodogs", defaultValue = "2", description = "Robodogs on each rover (default: ${DEFAULT-VALUE}).")
+    int robodogs;
+
     @Option(names = "--helicopters", defaultValue = "2", description = "Helicopters in the fleet (default: ${DEFAULT-VALUE}).")
     int helicopters;
 
@@ -54,6 +57,9 @@ final class RunCommand extends AbstractAppCommand {
 
     @Option(names = "--send-helicopters", paramLabel = "N", description = "Change the plan: have N helicopters ready instead of the planner's number.")
     Integer sendHelicopters;
+
+    @Option(names = "--send-robodogs", paramLabel = "N", description = "Change the plan: drop N robodogs (0 for none) instead of the planner's number.")
+    Integer sendRobodogs;
 
     @Option(names = "--pattern", paramLabel = "NAME", description = "Change the plan: search with lawnmower or spiral instead of the planner's choice.")
     String pattern;
@@ -91,7 +97,7 @@ final class RunCommand extends AbstractAppCommand {
     protected int execute(AppContext app, PrintWriter out, PrintWriter err) throws IOException {
         FleetLayout layout;
         try {
-            layout = new FleetLayout(rovers, drones, helicopters);
+            layout = new FleetLayout(rovers, drones, helicopters, robodogs);
         } catch (IllegalArgumentException e) {
             err.println(e.getMessage());
             return ExitCodes.USAGE;
@@ -106,6 +112,10 @@ final class RunCommand extends AbstractAppCommand {
         }
         if ((sendDrones != null && sendDrones < 1) || (sendHelicopters != null && sendHelicopters < 1)) {
             err.println("--send-drones and --send-helicopters must be at least 1.");
+            return ExitCodes.USAGE;
+        }
+        if (sendRobodogs != null && sendRobodogs < 0) {
+            err.println("--send-robodogs must not be negative.");
             return ExitCodes.USAGE;
         }
         SearchStrategy chosenPattern = null;
@@ -134,12 +144,13 @@ final class RunCommand extends AbstractAppCommand {
         MissionControl control = rig.control();
 
         MissionPlan plan = control.plan(incident);
-        if (sendDrones != null || sendHelicopters != null || chosenPattern != null) {
+        if (sendDrones != null || sendHelicopters != null || sendRobodogs != null || chosenPattern != null) {
             try {
                 plan = control.revise(plan,
                         sendDrones != null ? sendDrones : plan.decision().drones(),
                         chosenPattern != null ? chosenPattern : plan.decision().strategy(),
-                        sendHelicopters != null ? sendHelicopters : plan.decision().helicopters());
+                        sendHelicopters != null ? sendHelicopters : plan.decision().helicopters(),
+                        sendRobodogs != null ? sendRobodogs : plan.decision().robodogs());
             } catch (RuntimeException e) {
                 control.cancelPlan(plan);
                 err.println("The plan cannot be changed that way: " + e.getMessage());

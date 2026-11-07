@@ -46,7 +46,7 @@ public final class SimulationRig {
         UnitFactory factory = new UnitFactory();
         Fleet fleet = new Fleet("fleet");
         for (int i = 0; i < layout.rovers(); i++) {
-            fleet.add(factory.createCarrier(depot, layout.dronesPerRover()));
+            fleet.add(factory.createCarrier(depot, layout.dronesPerRover(), layout.robodogsPerRover()));
         }
         for (int i = 0; i < layout.helicopters(); i++) {
             fleet.add(factory.createHelicopter(depot));

@@ -36,7 +36,7 @@ import javax.swing.SwingUtilities;
 
 /**
  * The window that asks the operator to approve a mission plan: the headline numbers as tiles, controls
- * to change how many drones and helicopters to send and which search pattern to fly, the planner's
+ * to change how many drones, robodogs and helicopters to send and which search pattern to fly, the planner's
  * reasoning, any notes, the full plan text, and Cancel / Launch buttons. Every change is compiled and
  * checked again, so the operator can only approve a plan that can actually be carried out.
  */
@@ -48,13 +48,16 @@ final class PlanDialog {
          * @return the plan for these choices
          * @throws RuntimeException with a readable message if they cannot be carried out
          */
-        MissionPlan revise(int drones, SearchStrategy strategy, int helicopters);
+        MissionPlan revise(int drones, SearchStrategy strategy, int helicopters, int robodogs);
 
         /** The most drones that are ready to be sent. */
         int maxDrones();
 
         /** The most helicopters that are ready to be sent. */
         int maxHelicopters();
+
+        /** The most robodogs that are ready to be dropped off. */
+        int maxRobodogs();
     }
 
     private final Component parent;
@@ -64,6 +67,7 @@ final class PlanDialog {
 
     private final Tile roverTile = new Tile("Rover");
     private final Tile droneTile = new Tile("Drones");
+    private final Tile robodogTile = new Tile("Robodogs");
     private final Tile helicopterTile = new Tile("Helicopters");
     private final Tile driveTile = new Tile("Drive");
     private final JLabel sub = new JLabel(" ");
@@ -71,6 +75,7 @@ final class PlanDialog {
     private final JPanel notes = new JPanel();
     private final JTextArea text = new JTextArea("", 7, 56);
     private final JSpinner droneSpinner;
+    private final JSpinner robodogSpinner;
     private final JSpinner helicopterSpinner;
     private final JComboBox<String> pattern = new JComboBox<>(
             SearchStrategies.all().stream().map(SearchStrategy::name).toArray(String[]::new));
@@ -92,6 +97,8 @@ final class PlanDialog {
         this.dialog = new JDialog(owner, "Approve this mission?", JDialog.DEFAULT_MODALITY_TYPE);
         int drones = plan.drones().size();
         droneSpinner = new JSpinner(new SpinnerNumberModel(drones, 1, Math.max(drones, reviser.maxDrones()), 1));
+        int robodogs = plan.decision().robodogs();
+        robodogSpinner = new JSpinner(new SpinnerNumberModel(robodogs, 0, Math.max(robodogs, reviser.maxRobodogs()), 1));
         int helicopters = plan.decision().helicopters();
         helicopterSpinner = new JSpinner(new SpinnerNumberModel(
                 Math.max(1, helicopters), 1, Math.max(Math.max(1, helicopters), reviser.maxHelicopters()), 1));
@@ -139,10 +146,11 @@ final class PlanDialog {
         heading.add(new TypeBadge(incident), BorderLayout.WEST);
         heading.add(names, BorderLayout.CENTER);
 
-        JPanel tiles = new JPanel(new GridLayout(1, 4, 10, 0));
+        JPanel tiles = new JPanel(new GridLayout(1, 5, 10, 0));
         tiles.setOpaque(false);
         tiles.add(roverTile);
         tiles.add(droneTile);
+        tiles.add(robodogTile);
         tiles.add(helicopterTile);
         tiles.add(driveTile);
 
@@ -151,10 +159,11 @@ final class PlanDialog {
                 + "and the rover's range before you can launch it.");
         hint.setFont(Theme.ui(Font.PLAIN, 12f));
         hint.setForeground(Theme.MUTED);
-        JPanel adjust = new JPanel(new GridLayout(1, 4, 10, 0));
+        JPanel adjust = new JPanel(new GridLayout(1, 5, 10, 0));
         adjust.setOpaque(false);
         adjust.add(labelled("Drones to send", droneSpinner));
         adjust.add(labelled("Search pattern", pattern));
+        adjust.add(labelled("Robodogs to drop", robodogSpinner));
         adjust.add(labelled("Helicopters ready", helicopterSpinner));
         JPanel backBox = new JPanel(new BorderLayout());
         backBox.setOpaque(false);
@@ -163,6 +172,7 @@ final class PlanDialog {
         problem.setFont(Theme.ui(Font.PLAIN, 12f));
         problem.setForeground(Theme.DANGER);
         droneSpinner.addChangeListener(e -> onEdit());
+        robodogSpinner.addChangeListener(e -> onEdit());
         helicopterSpinner.addChangeListener(e -> onEdit());
         pattern.addActionListener(e -> onEdit());
         back.addActionListener(e -> goBack());
@@ -237,10 +247,11 @@ final class PlanDialog {
         }
         int drones = (Integer) droneSpinner.getValue();
         int helicopters = (Integer) helicopterSpinner.getValue();
+        int robodogs = (Integer) robodogSpinner.getValue();
         SearchStrategy strategy = SearchStrategies.parse((String) pattern.getSelectedItem());
         try {
-            MissionPlan revised = sameAsOriginal(drones, strategy, helicopters)
-                    ? original : reviser.revise(drones, strategy, helicopters);
+            MissionPlan revised = sameAsOriginal(drones, strategy, helicopters, robodogs)
+                    ? original : reviser.revise(drones, strategy, helicopters, robodogs);
             current = revised;
             showProblem(null);
             refresh(revised);
@@ -251,8 +262,9 @@ final class PlanDialog {
         }
     }
 
-    private boolean sameAsOriginal(int drones, SearchStrategy strategy, int helicopters) {
+    private boolean sameAsOriginal(int drones, SearchStrategy strategy, int helicopters, int robodogs) {
         return drones == original.drones().size()
+                && robodogs == original.decision().robodogs()
                 && strategy.name().equals(original.decision().strategy().name())
                 && helicopters == original.decision().helicopters();
     }
@@ -268,6 +280,7 @@ final class PlanDialog {
         syncing = true;
         try {
             droneSpinner.setValue(plan.drones().size());
+            robodogSpinner.setValue(plan.decision().robodogs());
             helicopterSpinner.setValue(Math.max(1, plan.decision().helicopters()));
             pattern.setSelectedItem(plan.decision().strategy().name());
         } finally {
@@ -288,6 +301,7 @@ final class PlanDialog {
     private void refresh(MissionPlan plan) {
         roverTile.set(plan.carrier().id());
         droneTile.set(String.valueOf(plan.drones().size()));
+        robodogTile.set(String.valueOf(plan.decision().robodogs()));
         helicopterTile.set(String.valueOf(plan.decision().helicopters()));
         driveTile.set(String.format(Locale.ROOT, "%.1f km", plan.depot().distanceKmTo(plan.staging())));
         Incident incident = plan.incident();
@@ -339,6 +353,7 @@ final class PlanDialog {
     /** For tests: the dialog's current settings. */
     String settings() {
         return droneSpinner.getValue() + "|" + pattern.getSelectedItem() + "|" + helicopterSpinner.getValue()
+                + "|dogs" + robodogSpinner.getValue()
                 + "|" + (launch.isEnabled() ? "ok" : "blocked");
     }
 

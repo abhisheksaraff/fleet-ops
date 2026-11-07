@@ -2,6 +2,7 @@ package com.fleetops.gui;
 
 import com.fleetops.app.AppContext;
 import com.fleetops.app.FleetLayout;
+import com.fleetops.domain.fleet.Carrier;
 import com.fleetops.app.SimulationRig;
 import com.fleetops.debrief.Debrief;
 import com.fleetops.domain.incident.Incident;
@@ -112,6 +113,7 @@ final class MainFrame extends JFrame {
     private final JButton resetButton = new JButton("Reset fleet");
     private final JSpinner rovers = new JSpinner(new SpinnerNumberModel(FleetLayout.DEFAULT.rovers(), 1, FleetLayout.MAX_ROVERS, 1));
     private final JSpinner drones = new JSpinner(new SpinnerNumberModel(FleetLayout.DEFAULT.dronesPerRover(), 1, 10, 1));
+    private final JSpinner robodogs = new JSpinner(new SpinnerNumberModel(FleetLayout.DEFAULT.robodogsPerRover(), 0, Carrier.DEFAULT_ROBODOG_CAPACITY, 1));
     private final JSpinner helicopters = new JSpinner(new SpinnerNumberModel(FleetLayout.DEFAULT.helicopters(), 1, FleetLayout.MAX_HELICOPTERS, 1));
     private final JComboBox<Integer> speed = new JComboBox<>(SPEEDS);
 
@@ -177,7 +179,7 @@ final class MainFrame extends JFrame {
         Ui.danger(abortButton);
         Ui.danger(abortAllButton);
         Ui.secondary(resetButton);
-        for (JSpinner spinner : List.of(rovers, drones, helicopters)) {
+        for (JSpinner spinner : List.of(rovers, drones, robodogs, helicopters)) {
             ((JSpinner.DefaultEditor) spinner.getEditor()).getTextField().setColumns(2);
         }
 
@@ -204,10 +206,12 @@ final class MainFrame extends JFrame {
         missionRow.add(abortButton);
         missionRow.add(abortAllButton);
 
-        JPanel fleetRow = new JPanel(new GridLayout(1, 4, 8, 0));
+        JPanel fleetRow = new JPanel(new GridLayout(1, 5, 6, 0));
         fleetRow.setOpaque(false);
         fleetRow.add(labelled("Rovers", rovers));
         fleetRow.add(labelled("Drones each", drones));
+        robodogs.setToolTipText("Robodogs on each rover");
+        fleetRow.add(labelled("Robodogs", robodogs));
         fleetRow.add(labelled("Helicopters", helicopters));
         fleetRow.add(labelled("Speed (x)", speed));
 
@@ -343,6 +347,7 @@ final class MainFrame extends JFrame {
         resetButton.setEnabled(!busy && !active && pendingPlan == null);
         rovers.setEnabled(!active);
         drones.setEnabled(!active);
+        robodogs.setEnabled(!active);
         helicopters.setEnabled(!active);
         refreshCard(selected);
     }
@@ -494,8 +499,13 @@ final class MainFrame extends JFrame {
     private void approve(MissionControl control, MissionPlan plan) {
         PlanDialog.Reviser reviser = new PlanDialog.Reviser() {
             @Override
-            public MissionPlan revise(int drones, SearchStrategy strategy, int helicopters) {
-                return control.revise(plan, drones, strategy, helicopters);
+            public MissionPlan revise(int drones, SearchStrategy strategy, int helicopters, int robodogs) {
+                return control.revise(plan, drones, strategy, helicopters, robodogs);
+            }
+
+            @Override
+            public int maxRobodogs() {
+                return control.availability(plan.incident()).availableRobodogs();
             }
 
             @Override
@@ -564,9 +574,10 @@ final class MainFrame extends JFrame {
      * @param drones the number of drones to send, or null to keep the current number
      * @param patternName {@code lawnmower} or {@code spiral}, or null to keep the current pattern
      * @param helicopters the number of helicopters to have ready, or null to keep the current number
+     * @param robodogs the number of robodogs to drop off, or null to keep the current number
      * @param reset true to go back to the planner's own plan
      */
-    void consoleEdit(Integer drones, String patternName, Integer helicopters, boolean reset, WindowCommands.Output out) {
+    void consoleEdit(Integer drones, String patternName, Integer helicopters, Integer robodogs, boolean reset, WindowCommands.Output out) {
         if (pendingPlan == null) {
             out.error("There is no plan waiting. Use: plan <id>");
             return;
@@ -574,11 +585,11 @@ final class MainFrame extends JFrame {
         MissionPlan next;
         if (reset) {
             next = pendingOriginal;
-        } else if (drones == null && patternName == null && helicopters == null) {
+        } else if (drones == null && patternName == null && helicopters == null && robodogs == null) {
             out.line("The plan sends " + pendingPlan.drones().size() + " drone(s) searching with "
                     + pendingPlan.decision().strategy().name() + " and has " + pendingPlan.decision().helicopters()
-                    + " helicopter(s) ready.");
-            out.line("Change it with: edit drones=N pattern=lawnmower|spiral helicopters=N   (edit reset goes back to the original)");
+                    + " helicopter(s) ready and drops off " + pendingPlan.decision().robodogs() + " robodog(s).");
+            out.line("Change it with: edit drones=N pattern=lawnmower|spiral helicopters=N robodogs=N   (edit reset goes back to the original)");
             return;
         } else {
             SearchStrategy strategy;
@@ -592,7 +603,8 @@ final class MainFrame extends JFrame {
                 next = pendingControl.revise(pendingOriginal,
                         drones == null ? pendingPlan.drones().size() : drones,
                         strategy,
-                        helicopters == null ? pendingPlan.decision().helicopters() : helicopters);
+                        helicopters == null ? pendingPlan.decision().helicopters() : helicopters,
+                        robodogs == null ? pendingPlan.decision().robodogs() : robodogs);
             } catch (RuntimeException e) {
                 out.error("The plan cannot be changed that way: " + e.getMessage());
                 return;
@@ -687,14 +699,14 @@ final class MainFrame extends JFrame {
         out.line("All missions are being aborted.");
     }
 
-    void consoleSetFleet(int r, int d, int h, WindowCommands.Output out) {
+    void consoleSetFleet(int r, int d, int h, int dogs, WindowCommands.Output out) {
         if (missionRunning() || pendingPlan != null) {
             out.error("The fleet cannot change while a mission runs or a plan is waiting.");
             return;
         }
         FleetLayout layout;
         try {
-            layout = new FleetLayout(r, d, h);
+            layout = new FleetLayout(r, d, h, dogs);
         } catch (IllegalArgumentException e) {
             out.error(e.getMessage());
             return;
@@ -702,14 +714,15 @@ final class MainFrame extends JFrame {
         rovers.setValue(layout.rovers());
         drones.setValue(layout.dronesPerRover());
         helicopters.setValue(layout.helicopters());
+        robodogs.setValue(layout.robodogsPerRover());
         resetFleet();
         out.line("Fleet set to " + layout.rovers() + " rover(s) with " + layout.dronesPerRover()
-                + " drone(s) each and " + layout.helicopters() + " helicopter(s).");
+                + " drone(s) and " + layout.robodogsPerRover() + " robodog(s) each, and " + layout.helicopters() + " helicopter(s).");
     }
 
     String fleetSummary() {
-        String configured = String.format(Locale.ROOT, "Fleet settings: %d rover(s) with %d drone(s) each, %d helicopter(s).",
-                (Integer) rovers.getValue(), (Integer) drones.getValue(), (Integer) helicopters.getValue());
+        String configured = String.format(Locale.ROOT, "Fleet settings: %d rover(s) with %d drone(s) and %d robodog(s) each, %d helicopter(s).",
+                (Integer) rovers.getValue(), (Integer) drones.getValue(), (Integer) robodogs.getValue(), (Integer) helicopters.getValue());
         return configured + (rig == null
                 ? " No fleet is on the map yet; one is placed when you plan an incident."
                 : String.format(Locale.ROOT, " The fleet is based at %.3f, %.3f.", rig.depot().lat(), rig.depot().lon()));
@@ -792,13 +805,13 @@ final class MainFrame extends JFrame {
             engineForMap = null;
         }
         if (rig == null) {
-            FleetLayout layout = new FleetLayout((Integer) rovers.getValue(), (Integer) drones.getValue(), (Integer) helicopters.getValue());
+            FleetLayout layout = new FleetLayout((Integer) rovers.getValue(), (Integer) drones.getValue(), (Integer) helicopters.getValue(), (Integer) robodogs.getValue());
             rig = SimulationRig.create(app, layout, near.area().center().offsetByKm(-DEPOT_KM, 0), SEED);
             engineForMap = rig.engine();
             rig.engine().addListener(this::onEvent);
             rig.control().addListener(this::onMissionFinished);
-            appendLog(String.format(Locale.ROOT, "Fleet ready: %d rover(s) with %d drone(s) each, %d helicopter(s).",
-                    layout.rovers(), layout.dronesPerRover(), layout.helicopters()));
+            appendLog(String.format(Locale.ROOT, "Fleet ready: %d rover(s) with %d drone(s) and %d robodog(s) each, %d helicopter(s).",
+                    layout.rovers(), layout.dronesPerRover(), layout.robodogsPerRover(), layout.helicopters()));
         }
         return rig;
     }

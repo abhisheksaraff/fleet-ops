@@ -88,11 +88,12 @@ final class WindowCommands {
         frame.consoleAbort(target, out);
     }
 
-    private static final String EDIT_USAGE = "edit [drones=N] [pattern=lawnmower|spiral] [helicopters=N] | edit reset";
+    private static final String EDIT_USAGE = "edit [drones=N] [pattern=lawnmower|spiral] [helicopters=N] [robodogs=N] | edit reset";
 
     private void edit(List<String> args, Output out) {
         Integer drones = null;
         Integer helicopters = null;
+        Integer robodogs = null;
         String pattern = null;
         boolean reset = false;
         for (String token : args.subList(1, args.size())) {
@@ -108,7 +109,7 @@ final class WindowCommands {
             String key = token.substring(0, equals).toLowerCase(Locale.ROOT);
             String value = token.substring(equals + 1);
             switch (key) {
-                case "drones", "helicopters" -> {
+                case "drones", "helicopters", "robodogs" -> {
                     Integer number = parseInt(value);
                     if (number == null) {
                         out.error("'" + value + "' is not a whole number. Usage: " + EDIT_USAGE);
@@ -116,6 +117,8 @@ final class WindowCommands {
                     }
                     if (key.equals("drones")) {
                         drones = number;
+                    } else if (key.equals("robodogs")) {
+                        robodogs = number;
                     } else {
                         helicopters = number;
                     }
@@ -127,7 +130,7 @@ final class WindowCommands {
                 }
             }
         }
-        frame.consoleEdit(drones, pattern, helicopters, reset, out);
+        frame.consoleEdit(drones, pattern, helicopters, robodogs, reset, out);
     }
 
     private void debrief(List<String> args, Output out) {
@@ -184,18 +187,19 @@ final class WindowCommands {
             out.line(frame.fleetSummary());
             return;
         }
-        if (args.size() != 4) {
-            out.error("Usage: fleet <rovers> <drones per rover> <helicopters>   (or just: fleet)");
+        if (args.size() != 4 && args.size() != 5) {
+            out.error("Usage: fleet <rovers> <drones per rover> <helicopters> [robodogs per rover]   (or just: fleet)");
             return;
         }
         Integer rovers = parseInt(args.get(1));
         Integer drones = parseInt(args.get(2));
         Integer helicopters = parseInt(args.get(3));
-        if (rovers == null || drones == null || helicopters == null) {
+        Integer robodogs = args.size() == 5 ? parseInt(args.get(4)) : Integer.valueOf(0);
+        if (rovers == null || drones == null || helicopters == null || robodogs == null) {
             out.error("The fleet sizes must be whole numbers: fleet <rovers> <drones per rover> <helicopters>");
             return;
         }
-        frame.consoleSetFleet(rovers, drones, helicopters, out);
+        frame.consoleSetFleet(rovers, drones, helicopters, robodogs, out);
     }
 
     private void layout(List<String> args, Output out) {
@@ -274,7 +278,7 @@ final class WindowCommands {
                 out.add("all");
                 yield out;
             }
-            case "edit" -> List.of("drones=", "pattern=lawnmower", "pattern=spiral", "helicopters=", "reset");
+            case "edit" -> List.of("drones=", "pattern=lawnmower", "pattern=spiral", "helicopters=", "robodogs=", "reset");
             case "debrief" -> ids(incidents, i -> true);
             case "focus" -> {
                 java.util.ArrayList<String> out = new java.util.ArrayList<>(ids(incidents, i -> true));

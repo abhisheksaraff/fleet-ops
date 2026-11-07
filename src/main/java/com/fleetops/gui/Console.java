@@ -313,7 +313,7 @@ final class Console extends JPanel {
             {"debrief [id]", "show the AI debrief of a finished mission"},
             {"focus <id|all>", "select an incident and zoom the map to it"},
             {"speed [n]", "show or set how fast simulated time runs"},
-            {"fleet [r d h]", "show or set rovers, drones per rover, helicopters"},
+            {"fleet [r d h [dogs]]", "show or set rovers, drones per rover, helicopters, robodogs per rover"},
             {"layout [name]", "map | list | control | sidebar | console"},
         };
         println("Commands that work on the stored incidents", Theme.MUTED, true, true);

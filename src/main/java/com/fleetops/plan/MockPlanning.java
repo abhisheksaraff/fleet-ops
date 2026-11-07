@@ -19,6 +19,7 @@ public final class MockPlanning implements Function<LlmRequest, String> {
     private static final Pattern SEVERITY = Pattern.compile("^Severity: (\\w+)", Pattern.MULTILINE);
     private static final Pattern PEOPLE = Pattern.compile("^Estimated people: (\\d+)", Pattern.MULTILINE);
     private static final Pattern DRONES = Pattern.compile("^Available drones: (\\d+)", Pattern.MULTILINE);
+    private static final Pattern ROBODOGS = Pattern.compile("^Available robodogs: (\\d+)", Pattern.MULTILINE);
     private static final Pattern HELICOPTERS = Pattern.compile("^Available helicopters: (\\d+)", Pattern.MULTILINE);
 
     /** True if the request is a planning question (as opposed to, say, a news verification). */
@@ -38,12 +39,15 @@ public final class MockPlanning implements Function<LlmRequest, String> {
         int drones = Math.min(RuleBasedPlanner.droneCountFor(severity), Math.max(1, Integer.parseInt(find(DRONES, header, "1"))));
         int helicopters = Math.min(RuleBasedPlanner.helicoptersFor(people), Integer.parseInt(find(HELICOPTERS, header, "1")));
 
+        int robodogs = Math.min(RuleBasedPlanner.robodogCountFor(severity), Integer.parseInt(find(ROBODOGS, header, "0")));
+
         Map<String, Object> answer = new LinkedHashMap<>();
         answer.put("drones", drones);
         answer.put("strategy", "lawnmower");
         answer.put("helicopters", helicopters);
+        answer.put("robodogs", robodogs);
         answer.put("rationale", "Mock planner: " + severity + " severity gets " + drones + " drone(s); about " + people
-                + " people get " + helicopters + " helicopter(s).");
+                + " people get " + helicopters + " helicopter(s); " + robodogs + " robodog(s) search near the drop-off.");
         return Json.write(answer);
     }
 

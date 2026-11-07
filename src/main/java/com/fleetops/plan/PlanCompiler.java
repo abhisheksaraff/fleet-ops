@@ -8,12 +8,14 @@ import com.fleetops.command.SweepAreaCommand;
 import com.fleetops.domain.fleet.Carrier;
 import com.fleetops.domain.fleet.Drone;
 import com.fleetops.domain.fleet.Fleet;
+import com.fleetops.domain.fleet.Robodog;
 import com.fleetops.domain.geo.GeoArea;
 import com.fleetops.domain.geo.GeoPoint;
 import com.fleetops.domain.incident.Incident;
 import com.fleetops.safety.SafetyPolicy;
 import com.fleetops.safety.SafetyReport;
 import com.fleetops.safety.VerifiedCommand;
+import com.fleetops.strategy.RadiusSweepStrategy;
 import com.fleetops.strategy.SearchStrategy;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -31,7 +33,9 @@ import java.util.function.Function;
  * <ol>
  *   <li>the rover drives to the middle of the incident square's south edge;
  *   <li>once it has arrived (an {@link AwaitCommand} in each drone's lane), every chosen drone
- *       sweeps its share of the square and then flies back to the rover.
+ *       sweeps its share of the square and then flies back to the rover;
+ *   <li>the chosen robodogs are dropped off along the south edge, each walks circles outward from
+ *       its drop-off point, and then walks back to the rover.
  * </ol>
  *
  * <p>Every movement is wrapped in a {@link VerifiedCommand} so the safety rules are applied at the
@@ -43,6 +47,11 @@ public final class PlanCompiler {
 
     /** Extra battery (percentage points) the ahead-of-time check keeps in hand beyond the safety reserve. */
     static final double FEASIBILITY_MARGIN_PERCENT = 1.0;
+
+    /** The most a robodog walks away from its drop-off point (km). */
+    static final double MAX_ROBODOG_RADIUS_KM = 0.4;
+
+    private static final SearchStrategy RADIUS_SWEEP = new RadiusSweepStrategy();
 
     private final Function<GeoPoint, SafetyPolicy> policies;
 
@@ -109,6 +118,8 @@ public final class PlanCompiler {
             notes.add("Raised the number of drones from " + wanted + " to " + drones + " so each can finish its share and get home.");
         }
 
+        Map<Robodog, GeoArea> dogAreas = robodogAreas(area, staging, PlanningContext.readyRobodogs(carrier), decision.robodogs(), notes);
+
         SafetyPolicy roverPolicy = policies.apply(depot);
         SafetyPolicy dronePolicy = policies.apply(staging);
         FlyToCommand driveThere = new FlyToCommand(carrier, staging);
@@ -130,7 +141,59 @@ public final class PlanCompiler {
             }
             commands.add(dronePolicy.verify(new ReturnToBaseCommand(drone, staging)));
         }
-        return new MissionPlan(incident, decision.withDrones(drones), carrier, depot, staging, sweeps, commands, notes);
+        for (Map.Entry<Robodog, GeoArea> entry : dogAreas.entrySet()) {
+            Robodog dog = entry.getKey();
+            commands.add(new AwaitCommand(dog, drive));
+            commands.add(dronePolicy.verify(new FlyToCommand(dog, entry.getValue().center())));
+            commands.add(dronePolicy.verify(new SweepAreaCommand(dog, entry.getValue(), RADIUS_SWEEP)));
+            commands.add(dronePolicy.verify(new ReturnToBaseCommand(dog, staging)));
+        }
+        return new MissionPlan(incident, decision.withDrones(drones).withRobodogs(dogAreas.size()), carrier, depot, staging,
+                sweeps, dogAreas, commands, notes);
+    }
+
+    /**
+     * Chooses the drop-off points of the robodogs: evenly along the south edge of the square, just
+     * far enough inside that each circle stays within the square. A robodog that could not walk its
+     * circle and get back with its battery reserve is left on the rover, with a note.
+     */
+    private static Map<Robodog, GeoArea> robodogAreas(
+            GeoArea area, GeoPoint staging, List<Robodog> ready, int requested, List<String> notes) {
+        Map<Robodog, GeoArea> result = new LinkedHashMap<>();
+        if (requested <= 0) {
+            return result;
+        }
+        int wanted = requested;
+        if (ready.size() < wanted) {
+            notes.add("Only " + ready.size() + " robodog(s) are ready on the rover; " + requested + " were requested.");
+            wanted = ready.size();
+        }
+        if (wanted == 0) {
+            return result;
+        }
+        List<Robodog> chosen = ready.stream()
+                .sorted(Comparator.comparingDouble(Robodog::batteryPercent).reversed().thenComparing(Robodog::id))
+                .limit(wanted)
+                .toList();
+        double half = area.radiusKm();
+        double radius = Math.min(MAX_ROBODOG_RADIUS_KM, half / wanted);
+        double reserve = SafetyPolicy.DEFAULT_RESERVE_PERCENT + FEASIBILITY_MARGIN_PERCENT;
+        for (int i = 0; i < chosen.size(); i++) {
+            Robodog dog = chosen.get(i);
+            double east = -half + half * (2 * i + 1) / wanted;
+            GeoPoint dropOff = area.center().offsetByKm(-half + radius, east);
+            GeoArea circle = new GeoArea(dropOff, radius);
+            double walk = new FlyToCommand(dog, dropOff).requiredBatteryPercent(staging);
+            SweepAreaCommand sweep = new SweepAreaCommand(dog, circle, RADIUS_SWEEP);
+            walk += sweep.requiredBatteryPercent(dropOff);
+            double home = sweep.endPosition(dropOff).distanceKmTo(staging) * dog.batteryDrainPercentPerKm();
+            if (walk + home + reserve > dog.batteryPercent()) {
+                notes.add(dog.id() + " stays on the rover: its battery could not cover the walk, a circle and the way back.");
+                continue;
+            }
+            result.put(dog, circle);
+        }
+        return result;
     }
 
     private static Map<Drone, List<GeoArea>> assignments(GeoArea area, List<Drone> ready, int drones) {

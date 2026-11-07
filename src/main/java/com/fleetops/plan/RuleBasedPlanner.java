@@ -25,6 +25,11 @@ public final class RuleBasedPlanner implements ResponsePlanner {
         return Math.min(MAX_HELICOPTERS, needed);
     }
 
+    /** Robodogs wanted for a given urgency: 1 for low and moderate, 2 for high and critical. */
+    public static int robodogCountFor(Severity severity) {
+        return (severity.level() + 1) / 2;
+    }
+
     @Override
     public ResponseDecision decide(PlanningContext context) {
         if (context.availableDrones() < 1) {
@@ -35,6 +40,8 @@ public final class RuleBasedPlanner implements ResponsePlanner {
         int drones = Math.min(wantedDrones, context.availableDrones());
         int wantedHelicopters = helicoptersFor(context.incident().estimatedPeople());
         int helicopters = Math.min(wantedHelicopters, context.availableHelicopters());
+        int wantedRobodogs = robodogCountFor(severity);
+        int robodogs = Math.min(wantedRobodogs, context.availableRobodogs());
 
         StringBuilder why = new StringBuilder()
                 .append("Severity ").append(severity).append(" calls for ").append(wantedDrones).append(wantedDrones == 1 ? " drone" : " drones");
@@ -46,7 +53,12 @@ public final class RuleBasedPlanner implements ResponsePlanner {
         if (helicopters < wantedHelicopters) {
             why.append(" (only ").append(helicopters).append(" ready)");
         }
-        why.append("; lawnmower pattern covers the area evenly with the least flying.");
-        return new ResponseDecision(drones, SearchStrategies.LAWNMOWER, helicopters, why.toString(), "rules");
+        why.append("; lawnmower pattern covers the area evenly with the least flying");
+        if (robodogs > 0) {
+            why.append("; ").append(robodogs).append(robodogs == 1 ? " robodog searches" : " robodogs search")
+                    .append(" the ground around the drop-off");
+        }
+        why.append('.');
+        return new ResponseDecision(drones, SearchStrategies.LAWNMOWER, helicopters, robodogs, why.toString(), "rules");
     }
 }

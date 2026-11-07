@@ -67,6 +67,10 @@ public final class LlmResponsePlanner implements ResponsePlanner {
         if (askedHelicopters < 0) {
             throw new BadAnswerException("\"helicopters\" must not be negative");
         }
+        int askedRobodogs = fields.get("robodogs") == null ? 0 : wholeNumber(fields.get("robodogs"), "robodogs");
+        if (askedRobodogs < 0) {
+            throw new BadAnswerException("\"robodogs\" must not be negative");
+        }
         SearchStrategy strategy = readStrategy(fields.get("strategy"));
 
         StringBuilder rationale = new StringBuilder(readRationale(fields.get("rationale")));
@@ -78,7 +82,11 @@ public final class LlmResponsePlanner implements ResponsePlanner {
         if (helicopters < askedHelicopters) {
             rationale.append(" [AI asked for ").append(askedHelicopters).append(" helicopters; only ").append(helicopters).append(" are ready.]");
         }
-        return new ResponseDecision(drones, strategy, helicopters, rationale.toString(), llm.name());
+        int robodogs = Math.min(askedRobodogs, context.availableRobodogs());
+        if (robodogs < askedRobodogs) {
+            rationale.append(" [AI asked for ").append(askedRobodogs).append(" robodogs; only ").append(robodogs).append(" are ready.]");
+        }
+        return new ResponseDecision(drones, strategy, helicopters, robodogs, rationale.toString(), llm.name());
     }
 
     private static int wholeNumber(Object value, String name) {

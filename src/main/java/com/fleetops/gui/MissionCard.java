@@ -362,8 +362,11 @@ final class MissionCard extends JPanel {
             long searching = mission.plan().drones().stream()
                     .filter(d -> d.state() == UnitState.OPERATING || d.state() == UnitState.EN_ROUTE).count();
             long flying = mission.helicopters().stream().filter(h -> h.state() != UnitState.IDLE).count();
-            units = searching + " of " + mission.plan().drones().size() + " drones searching · "
-                    + flying + " of " + mission.helicopters().size() + " helicopters flying";
+            long walking = mission.plan().robodogs().stream()
+                    .filter(d -> d.state() == UnitState.OPERATING || d.state() == UnitState.EN_ROUTE).count();
+            units = "drones " + searching + "/" + mission.plan().drones().size()
+                    + (mission.plan().robodogs().isEmpty() ? "" : " · robodogs " + walking + "/" + mission.plan().robodogs().size())
+                    + " · helicopters " + flying + "/" + mission.helicopters().size();
         }
         String signature = main + "|" + sub + "|" + units + "|" + accent.getRGB() + "|" + progressCaption.getText();
         if (!signature.equals(lastProgress)) {

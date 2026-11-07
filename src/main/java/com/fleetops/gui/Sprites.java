@@ -51,6 +51,24 @@ final class Sprites {
         "...............",
     };
 
+    private static final String[] ROBODOG = {
+        "...............",
+        "...............",
+        "......ccc......",
+        ".....cBWBc.....",
+        "......ccc......",
+        ".aa...aaa...aa.",
+        ".aaa.aaaaa.aaa.",
+        "..aaaaaaaaaaa..",
+        ".....aaBBaa....",
+        "..aaaaaaaaaaa..",
+        ".aaa.aaaaa.aaa.",
+        ".aa...aaa...aa.",
+        "...............",
+        "...............",
+        "...............",
+    };
+
     private static final String[] HELICOPTER = {
         ".......kk.......",
         ".....kkwwkk.....",
@@ -102,6 +120,7 @@ final class Sprites {
 
     private static BufferedImage rover;
     private static BufferedImage drone;
+    private static BufferedImage robodog;
     private static BufferedImage helicopter;
 
     private Sprites() {}
@@ -118,6 +137,13 @@ final class Sprites {
             drone = build(DRONE, Map.of());
         }
         return drone;
+    }
+
+    static synchronized BufferedImage robodog() {
+        if (robodog == null) {
+            robodog = build(ROBODOG, Map.of());
+        }
+        return robodog;
     }
 
     static synchronized BufferedImage helicopter() {

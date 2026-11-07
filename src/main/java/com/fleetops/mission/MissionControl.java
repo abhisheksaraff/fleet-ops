@@ -6,6 +6,7 @@ import com.fleetops.command.MissionCommand;
 import com.fleetops.command.ReturnToBaseCommand;
 import com.fleetops.domain.fleet.Carrier;
 import com.fleetops.domain.fleet.Drone;
+import com.fleetops.domain.fleet.Robodog;
 import com.fleetops.domain.fleet.Helicopter;
 import com.fleetops.domain.fleet.Unit;
 import com.fleetops.domain.fleet.UnitState;
@@ -178,6 +179,11 @@ public final class MissionControl {
      *     helicopters, or the batteries cannot cover the area)
      */
     public MissionPlan revise(MissionPlan plan, int drones, SearchStrategy strategy, int helicopters) {
+        return revise(plan, drones, strategy, helicopters, plan.decision().robodogs());
+    }
+
+    /** Like {@link #revise(MissionPlan, int, SearchStrategy, int)}, and the robodog count can be changed too (0 is allowed). */
+    public MissionPlan revise(MissionPlan plan, int drones, SearchStrategy strategy, int helicopters, int robodogs) {
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(strategy, "strategy");
         Incident incident = plan.incident();
@@ -194,7 +200,14 @@ public final class MissionControl {
         if (helicopters > readyHelicopters) {
             throw new PlanningException("Only " + readyHelicopters + " helicopter(s) are ready; " + helicopters + " were requested");
         }
-        return compiler.compile(incident, plan.decision().edited(drones, strategy, helicopters), engine.world().fleet());
+        if (robodogs < 0) {
+            throw new PlanningException("The number of robodogs must not be negative");
+        }
+        int readyRobodogs = availability(incident).availableRobodogs();
+        if (robodogs > readyRobodogs) {
+            throw new PlanningException("Only " + readyRobodogs + " robodog(s) are ready; " + robodogs + " were requested");
+        }
+        return compiler.compile(incident, plan.decision().edited(drones, strategy, helicopters, robodogs), engine.world().fleet());
     }
 
     /** The operator turns a plan down: the incident goes back to VERIFIED and can be planned again. */
@@ -287,9 +300,9 @@ public final class MissionControl {
         engine.hold(carrier);
 
         List<MissionCommand> recovery = new ArrayList<>();
-        for (Drone drone : carrier.drones()) {
-            if (drone.state() != UnitState.IDLE) {
-                ReturnToBaseCommand back = new ReturnToBaseCommand(drone, carrier.position());
+        for (Unit carried : carrier.units()) {
+            if ((carried instanceof Drone || carried instanceof Robodog) && carried.state() != UnitState.IDLE) {
+                ReturnToBaseCommand back = new ReturnToBaseCommand(carried, carrier.position());
                 queue.enqueue(back);
                 recovery.add(back);
             }
@@ -427,6 +440,7 @@ public final class MissionControl {
         List<Unit> needed = new ArrayList<>();
         needed.add(plan.carrier());
         needed.addAll(plan.drones());
+        needed.addAll(plan.robodogs());
         for (Unit unit : needed) {
             if (committed.contains(unit)) {
                 throw new MissionException(unit.id() + " is already on another mission");
