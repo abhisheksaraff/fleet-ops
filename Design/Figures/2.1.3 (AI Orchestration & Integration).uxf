@@ -1,0 +1,81 @@
+<diagram program="umletino" version="15.1"><zoom_level>7</zoom_level><element><id>UMLClass</id><coordinates><x>756</x><y>154</y><w>210</w><h>147</h></coordinates><panel_attributes>&lt;&lt;controller&gt;&gt;
+service::IntelligenceService
+--
+- telegramAdapter: TelegramAdapter
+- geminiClient: GeminiClient
+--
++ ingestFeeds(): List&lt;MissionIncident&gt;
++ verifyIncident(incident: MissionIncident)
+: boolean
+--
+Responsibilities
+-- Facade orchestrating data fetching 
+and parsing workflows.</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLClass</id><coordinates><x>560</x><y>721</y><w>217</w><h>133</h></coordinates><panel_attributes>&lt;&lt;database&gt;&gt;
+database::DatabaseTool
+--
+- dbManager: H2DatabaseManager
+--
++ executeToolCall(params: Map&lt;String, Object&gt;)
+: ToolResult
++ querySpatialRadius(center: Point, radius: double)
+: List&lt;MissionIncident&gt;
+--
+Responsibilities
+-- -- Exposes spatial database search and 
+persistence interfaces as an LLM tool.</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLClass</id><coordinates><x>385</x><y>546</y><w>196</w><h>133</h></coordinates><panel_attributes>&lt;&lt;factory&gt;&gt;
+engine::TaskFactory
+--
+--
++ createCommand
+(commandType: String, parameters: Map&lt;String, Object&gt;): Command
+--
+Responsibilities
+-- Instantiates concrete command instances from 
+	AI plan payloads.</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLClass</id><coordinates><x>756</x><y>553</y><w>196</w><h>133</h></coordinates><panel_attributes>&lt;&lt;controller&gt;&gt;
+service::PlanOrchestrator
+--
+- geminiClient: GeminiClient
+- taskFactory: TaskFactory
+--
++ generateTacticalPlan
+	(incidents: List&lt;MissionIncident&gt;): TacticalPlan
+--
+Responsibilities
+-- Orchestrates prompt construction 
+and AI task decomposition.</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLClass</id><coordinates><x>756</x><y>357</y><w>196</w><h>133</h></coordinates><panel_attributes>&lt;&lt;client&gt;&gt;
+integration::GeminiClient
+--
+- apiKey: String
+- modelName: String
+--
++ generate(prompt: String): String
++ extractEntities(rawText: String): String
+--
+Responsibilities
+-- Communicates with Google Gemini API 
+for reasoning and extraction.</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLClass</id><coordinates><x>357</x><y>161</y><w>210</w><h>133</h></coordinates><panel_attributes>&lt;&lt;adapter&gt;&gt;
+integration::TelegramAdapter
+--
+- botToken: String
+- httpClient: HttpClient
+--
++ fetchData(): String
++ parseRawTelegramPayload(response: String)
+	: RawFeedData
+--
+Responsibilities
+-- Connects to Telegram API to fetch raw 
+	intelligence feeds.</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLClass</id><coordinates><x>364</x><y>350</y><w>210</w><h>126</h></coordinates><panel_attributes>&lt;&lt;interface&gt;&gt;
+integration::IntelligenceFeed
+--
+--
+/+ fetchData(): String/
+/+ parseFeed(data: String): List&lt;RawFeedData&gt;/
+--
+Responsibilities
+-- Standardizes heterogeneous 
+external feeds (Telegram, RSS).</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>455</x><y>287</y><w>49</w><h>77</h></coordinates><panel_attributes>lt=&lt;&lt;.
+adapter</panel_attributes><additional_attributes>10;10;10;90</additional_attributes></element><element><id>Relation</id><coordinates><x>560</x><y>210</y><w>210</w><h>21</h></coordinates><panel_attributes>lt=&lt;-</panel_attributes><additional_attributes>10;10;280;10</additional_attributes></element><element><id>Relation</id><coordinates><x>847</x><y>294</y><w>42</w><h>77</h></coordinates><panel_attributes>lt=&lt;-
+client</panel_attributes><additional_attributes>10;90;10;10</additional_attributes></element><element><id>Relation</id><coordinates><x>847</x><y>483</y><w>42</w><h>84</h></coordinates><panel_attributes>lt=&lt;-
+client</panel_attributes><additional_attributes>10;10;10;100</additional_attributes></element><element><id>Relation</id><coordinates><x>574</x><y>595</y><w>196</w><h>28</h></coordinates><panel_attributes>lt=&lt;-
+factory</panel_attributes><additional_attributes>10;20;260;20</additional_attributes></element></diagram>

@@ -1,0 +1,25 @@
+<diagram program="umletino" version="15.1"><zoom_level>10</zoom_level><element><id>UMLSequenceAllInOne</id><coordinates><x>30</x><y>90</y><w>1340</w><h>620</h></coordinates><panel_attributes>title=Sequence Diagram 2: Execution, Safety &amp; Monitoring
+obj=Operator~op
+obj=PlanApprovalGUI~approvalGui
+obj=ActionVerifier~verifier
+obj=ScanAreaCommand~cmd
+obj=ReconDrone~drone
+obj=GridEngine~engine
+obj=GridCanvasGUI~gridGui
+
+op-&gt;approvalGui: onCommitPlanClicked(); on=approvalGui
+approvalGui-&gt;verifier: verifyCommand(); on=verifier
+verifier-&gt;approvalGui: return true; off=verifier
+approvalGui-&gt;cmd: execute(); on=cmd
+cmd-&gt;drone: dispatchToFleet(); on=drone
+drone-&gt;cmd: success; off=drone
+cmd-&gt;approvalGui: finished; off=cmd
+off=approvalGui
+
+engine-&gt;gridGui: updateGridTick(); on=gridGui
+gridGui-&gt;engine: done; off=gridGui
+
+op-&gt;approvalGui: onAbortTriggered(); on=approvalGui
+approvalGui-&gt;drone: broadcastAbort(); on=drone
+drone-&gt;approvalGui: aborted; off=drone
+off=approvalGui</panel_attributes><additional_attributes></additional_attributes></element></diagram>

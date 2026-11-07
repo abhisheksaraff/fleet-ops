@@ -1,0 +1,23 @@
+<diagram program="umletino" version="15.1"><zoom_level>10</zoom_level><element><id>UMLSequenceAllInOne</id><coordinates><x>10</x><y>130</y><w>1560</w><h>590</h></coordinates><panel_attributes>title=Sequence Diagram 1: Ingestion &amp; Plan Generation
+obj=Operator~op
+obj=External API~api
+obj=TelegramAdapter~adapter
+obj=MissionPlannerGUI~gui
+obj=PlanOrchestrator~orch
+obj=GeminiClient~ai
+obj=TaskFactory~factory
+obj=DatabaseTool~db
+
+api-&gt;adapter: postIncidentPayload(); on=adapter
+adapter-&gt;db: saveIncident(); on=db
+db-&gt;adapter: success; off=db
+op-&gt;gui: onGeneratePlanClicked(); on=gui
+gui-&gt;orch: generateTacticalPlan(); on=orch
+orch-&gt;db: querySpatialRadius(); on=db
+db-&gt;orch: return incidents; off=db
+orch-&gt;ai: sendPrompt(); on=ai
+ai-&gt;orch: return jsonResponse; off=ai
+orch-&gt;factory: createCommand(); on=factory
+factory-&gt;orch: return ScanAreaCommand; off=factory
+orch-&gt;gui: displayProposedPlan(); off=orch
+off=gui</panel_attributes><additional_attributes></additional_attributes></element></diagram>

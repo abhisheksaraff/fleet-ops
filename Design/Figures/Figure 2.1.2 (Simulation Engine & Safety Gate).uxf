@@ -1,0 +1,73 @@
+<diagram program="umletino" version="15.1"><zoom_level>10</zoom_level><element><id>UMLClass</id><coordinates><x>690</x><y>380</y><w>310</w><h>240</h></coordinates><panel_attributes>&lt;&lt;engine&gt;&gt;
+engine::GridEngine
+--
+- width: int
+- height: int
+- cells: GridCell[][]
+--
++ initializeGrid
+	(width: int, height: int, preset: String)
+	: void
++ updateSimulationTick(): void
++ clearFogOfWar(bounds: Rectangle): void
+--
+Responsibilities
+-- Manages 2D grid matrix state and 
+	simulation tick loops.</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLClass</id><coordinates><x>680</x><y>700</y><w>330</w><h>250</h></coordinates><panel_attributes>&lt;&lt;engine&gt;&gt;
+engine::ActionVerifier
+--
+- gridEngine: GridEngine
+--
++ validateAction
+	(command: Command, robot: Robot)
+	: boolean
++ checkBatteryMargin
+	(robot: Robot, requiredEnergy: double)
+	: boolean
++ checkObstacleCollision
+	(destination: Point): boolean
+--
+Responsibilities
+-- Central deterministic rule validation engine 
+intercepting execution.</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLClass</id><coordinates><x>210</x><y>310</y><w>310</w><h>190</h></coordinates><panel_attributes>&lt;&lt;boundary&gt;&gt;
+ui::GridCanvasGUI
+--
+- canvas: Canvas
+- zoomLevel: double
+--
++ initializeCanvas(): void
++ renderGridMatrix(matrix: GridCell[][]): void
+--
+Responsibilities
+-- Renders the interactive 2D matrix 
+	map as an observer.</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLClass</id><coordinates><x>210</x><y>600</y><w>310</w><h>190</h></coordinates><panel_attributes>&lt;&lt;interface&gt;&gt;
+engine::GridObserver
+--
+--
+/+ onGridStateUpdated(): void/
+/+ onEntityMoved(entityId: String, newPos: Point): void/
+--
+Responsibilities
+-- Defines subscription contract for real-time updates.</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLClass</id><coordinates><x>690</x><y>50</y><w>300</w><h>240</h></coordinates><panel_attributes>&lt;&lt;entity&gt;&gt;
+model::GridCell
+--
+- x: int
+- y: int
+- isPassable: boolean
+- isFogOfWar: boolean
+--
++ setPassable(passable: boolean): void
++ getCoordinates(): Point
+--
+Responsibilities
+-- Represents a single cell within the 
+	2D occupancy grid.</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>350</x><y>490</y><w>30</w><h>130</h></coordinates><panel_attributes>lt=&lt;&lt;.</panel_attributes><additional_attributes>10;110;10;10</additional_attributes></element><element><id>Relation</id><coordinates><x>840</x><y>280</y><w>50</w><h>120</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
+m1=1
+m2=1..*
+cells</panel_attributes><additional_attributes>10;100;10;10</additional_attributes></element><element><id>Relation</id><coordinates><x>510</x><y>400</y><w>200</w><h>120</h></coordinates><panel_attributes>lt=&lt;-
+m1=1
+m2=1
+engine</panel_attributes><additional_attributes>180;100;10;10</additional_attributes></element><element><id>Relation</id><coordinates><x>830</x><y>610</y><w>70</w><h>110</h></coordinates><panel_attributes>lt=&lt;-
+m1=1
+m2=1
+engine</panel_attributes><additional_attributes>10;10;10;90</additional_attributes></element></diagram>
