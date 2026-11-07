@@ -12,6 +12,7 @@ import com.fleetops.domain.geo.GeoArea;
 import com.fleetops.domain.geo.GeoPoint;
 import com.fleetops.domain.incident.Incident;
 import com.fleetops.safety.SafetyPolicy;
+import com.fleetops.safety.SafetyReport;
 import com.fleetops.safety.VerifiedCommand;
 import com.fleetops.strategy.SearchStrategy;
 import java.util.ArrayList;
@@ -110,8 +111,16 @@ public final class PlanCompiler {
 
         SafetyPolicy roverPolicy = policies.apply(depot);
         SafetyPolicy dronePolicy = policies.apply(staging);
+        FlyToCommand driveThere = new FlyToCommand(carrier, staging);
+        SafetyReport check = roverPolicy.evaluate(driveThere, depot);
+        if (!check.isSafe()) {
+            // Refuse now rather than launch a mission whose first command the safety gate will stop.
+            throw new PlanningException(String.format(Locale.ROOT,
+                    "%s cannot reach '%s' (%.0f km from its base): %s",
+                    carrier.id(), incident.title(), depot.distanceKmTo(staging), check.summary()));
+        }
         List<MissionCommand> commands = new ArrayList<>();
-        VerifiedCommand drive = roverPolicy.verify(new FlyToCommand(carrier, staging));
+        VerifiedCommand drive = roverPolicy.verify(driveThere);
         commands.add(drive);
         for (Map.Entry<Drone, List<GeoArea>> entry : sweeps.entrySet()) {
             Drone drone = entry.getKey();
