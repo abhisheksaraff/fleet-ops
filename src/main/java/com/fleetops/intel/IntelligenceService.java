@@ -126,6 +126,9 @@ public final class IntelligenceService {
         if (assessment.location().isEmpty()) {
             return reject(item, "the location could not be determined" + because(assessment));
         }
+        if (assessment.estimatedPeople() < 1) {
+            return reject(item, "nobody is reported at risk, so there is no one to rescue" + because(assessment));
+        }
         return store(item, assessment, assessment.location().get());
     }
 

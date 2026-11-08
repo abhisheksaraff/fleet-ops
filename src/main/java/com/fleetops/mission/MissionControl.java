@@ -420,7 +420,11 @@ public final class MissionControl {
                 mission.plan().drones().size(),
                 mission.plan().robodogs().size(),
                 mission.helicopters().size(),
-                mission.plan().decision().operatorChanges().orElse(""));
+                mission.plan().decision().operatorChanges().orElse(""),
+                mission.plan().minDrones(),
+                mission.plan().maxDrones(),
+                (int) engine.world().fleet().units().stream().filter(Helicopter.class::isInstance).count(),
+                mission.plan().carrier().robodogs().size());
         mission.finish(status, report);
         dispatcher.release(zone);
 

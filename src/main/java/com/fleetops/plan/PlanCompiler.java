@@ -117,6 +117,13 @@ public final class PlanCompiler {
         if (drones > wanted) {
             notes.add("Raised the number of drones from " + wanted + " to " + drones + " so each can finish its share and get home.");
         }
+        int minDrones = drones;
+        for (int fewer = 1; fewer < drones; fewer++) {
+            if (infeasible(assignments(area, ready, fewer), strategy, staging).isEmpty()) {
+                minDrones = fewer;
+                break;
+            }
+        }
 
         Map<Robodog, GeoArea> dogAreas = robodogAreas(area, staging, PlanningContext.readyRobodogs(carrier), decision.robodogs(), notes);
 
@@ -149,7 +156,7 @@ public final class PlanCompiler {
             commands.add(dronePolicy.verify(new ReturnToBaseCommand(dog, staging)));
         }
         return new MissionPlan(incident, decision.withDrones(drones).withRobodogs(dogAreas.size()), carrier, depot, staging,
-                sweeps, dogAreas, commands, notes);
+                sweeps, dogAreas, commands, notes, minDrones, maxDrones);
     }
 
     /**

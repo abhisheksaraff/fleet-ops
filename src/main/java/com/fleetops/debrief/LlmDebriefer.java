@@ -5,10 +5,12 @@ import com.fleetops.ai.LlmClient;
 import com.fleetops.ai.LlmException;
 import com.fleetops.ai.LlmRequest;
 import com.fleetops.mission.MissionReport;
+import com.fleetops.mission.MissionStatus;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 /**
  * Lets an AI model write the debrief. The model gets the hard numbers and the fenced incident text and
@@ -61,8 +63,23 @@ public final class LlmDebriefer extends AbstractDebriefer {
         if (next.stream().allMatch(String::isBlank)) {
             throw new BadAnswerException("\"nextTime\" must hold at least one concrete change to the fleet or the search");
         }
-        return new Debrief(summary, withoutEmptyClaims(list(fields, "wentWell"), facts),
-                withoutEmptyClaims(list(fields, "problems"), facts), next, llm.name(), true);
+        // Advice that this fleet cannot follow (fewer drones than the area needs, the number already sent, more
+        // units than exist) is dropped; if nothing usable is left, the fixed rules supply the lessons.
+        List<String> usable = next.stream()
+                .filter(item -> !item.isBlank() && DebriefRules.advicePossible(item, facts))
+                .toList();
+        if (usable.isEmpty()) {
+            usable = DebriefRules.nextTime(facts);
+        }
+        return new Debrief(blamesTheMissing(summary, facts) ? DebriefRules.summary(facts) : summary,
+                withoutEmptyClaims(list(fields, "wentWell"), facts),
+                withoutEmptyClaims(list(fields, "problems"), facts), usable, llm.name(), true);
+    }
+
+    /** True if the summary says an aborted mission was stopped because people were not found, which is backwards. */
+    private static boolean blamesTheMissing(String summary, DebriefFacts facts) {
+        return facts.status() == MissionStatus.ABORTED
+                && Pattern.compile("(?i)abort\\w*\\s+because|because[^.]*\\b(never found|not found|were not found)").matcher(summary).find();
     }
 
     /** Drops an item that talks about a count that is zero ("no one was never found"), which says nothing. */
@@ -74,7 +91,9 @@ public final class LlmDebriefer extends AbstractDebriefer {
                             && (text.contains("found but not rescued") || text.contains("found but not picked up"));
                     boolean emptyHidden = facts.notFound() == 0
                             && (text.contains("never found") || text.contains("not found"));
-                    return !emptyFound && !emptyHidden;
+                    boolean notAProblem = facts.status() == MissionStatus.ABORTED
+                            && text.matches("(?s)the mission was (aborted|stopped)( early)?( by the operator)?\\.?");
+                    return !emptyFound && !emptyHidden && !notAProblem;
                 })
                 .toList();
     }

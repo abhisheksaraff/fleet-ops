@@ -27,12 +27,18 @@ final class NewsPrompts {
             - "real" is true only if the text reports an actual incident happening now or very recently. \
             It is false for forecasts, warnings about possible events, opinion pieces, drills, \
             anniversaries, history, fiction, or items that only mention the word in passing.
+            - A rescue team can only help where people are in danger at a place it can reach. Set "real" \
+            to false when nobody is reported hurt, trapped, missing or without shelter or food (for example \
+            property damage only, "no injuries reported", or a fire that is already out with nobody affected), \
+            and when the story is about a whole country, province, state or region and not one affected \
+            area (a general famine warning, a weather outlook, a regional alert).
             - latitude and longitude are the centre of the affected area in decimal degrees. \
             Use the place named in the text; approximate is fine. If you cannot tell where it is, \
             use null for both. Never invent coordinates.
             - areaRadiusKm is half the side of the affected square, from 0.5 to 3.
             - estimatedPeople is the number of people who may need rescue, as stated in the text, \
-            or your best estimate.
+            or your best estimate. It is at least 1 for a real incident; if nobody is at risk, the \
+            incident is not real for our purposes.
             - confidence is how sure you are that "real" is correct, from 0 to 1.
 
             Answer with exactly one JSON object and nothing else, using these keys:

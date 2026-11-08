@@ -21,6 +21,10 @@ import java.util.Objects;
  * @param robodogs how many robodogs were sent
  * @param helicopters how many helicopters were sent
  * @param operatorChange what the operator changed in the AI's plan, or empty if nothing
+ * @param minDrones the fewest drones that could search the area, or 0 if not known
+ * @param maxDrones the most drones that could have been sent, or 0 if not known
+ * @param maxHelicopters how many helicopters the fleet has, or 0 if not known
+ * @param maxRobodogs how many robodogs the rover carries, or 0 if not known
  */
 public record MissionReport(
         Incident incident,
@@ -35,12 +39,24 @@ public record MissionReport(
         int drones,
         int robodogs,
         int helicopters,
-        String operatorChange) {
+        String operatorChange,
+        int minDrones,
+        int maxDrones,
+        int maxHelicopters,
+        int maxRobodogs) {
 
     /** A report that does not say which units were sent. */
     public MissionReport(Incident incident, MissionStatus status, int people, int rescued, int foundNotRescued,
             int notFound, long ticks, double seconds, List<String> notes) {
         this(incident, status, people, rescued, foundNotRescued, notFound, ticks, seconds, notes, 0, 0, 0, "");
+    }
+
+    /** A report that does not say how many units the fleet had. */
+    public MissionReport(Incident incident, MissionStatus status, int people, int rescued, int foundNotRescued,
+            int notFound, long ticks, double seconds, List<String> notes, int drones, int robodogs, int helicopters,
+            String operatorChange) {
+        this(incident, status, people, rescued, foundNotRescued, notFound, ticks, seconds, notes,
+                drones, robodogs, helicopters, operatorChange, 0, 0, 0, 0);
     }
 
     public MissionReport {
@@ -64,7 +80,7 @@ public record MissionReport(
         if (notFound > 0) {
             text.append(String.format(Locale.ROOT, ", %d never found", notFound));
         }
-        text.append(String.format(Locale.ROOT, " (%.1f minutes simulated, %d ticks)", seconds / 60.0, ticks));
+        text.append(String.format(Locale.ROOT, " (%.1f minutes simulated, including the flight home, %d ticks)", seconds / 60.0, ticks));
         notes.forEach(note -> text.append("\n  Note: ").append(note));
         return text.toString();
     }

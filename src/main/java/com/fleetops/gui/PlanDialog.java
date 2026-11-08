@@ -96,7 +96,8 @@ final class PlanDialog {
         Window owner = parent == null ? null : SwingUtilities.getWindowAncestor(parent);
         this.dialog = new JDialog(owner, "Approve this mission?", JDialog.DEFAULT_MODALITY_TYPE);
         int drones = plan.drones().size();
-        droneSpinner = new JSpinner(new SpinnerNumberModel(drones, 1, Math.max(drones, reviser.maxDrones()), 1));
+        droneSpinner = new JSpinner(new SpinnerNumberModel(drones, Math.min(drones, Math.max(1, plan.minDrones())),
+                Math.max(drones, reviser.maxDrones()), 1));
         int robodogs = plan.decision().robodogs();
         robodogSpinner = new JSpinner(new SpinnerNumberModel(robodogs, 0, Math.max(robodogs, reviser.maxRobodogs()), 1));
         int helicopters = plan.decision().helicopters();
@@ -162,6 +163,7 @@ final class PlanDialog {
         JPanel adjust = new JPanel(new GridLayout(1, 5, 10, 0));
         adjust.setOpaque(false);
         adjust.add(labelled("Drones to send", droneSpinner));
+        droneSpinner.setToolTipText("The fewest drones that can search this area on one battery each is the lowest number offered.");
         adjust.add(labelled("Search pattern", pattern));
         adjust.add(labelled("Robodogs to drop", robodogSpinner));
         adjust.add(labelled("Helicopters ready", helicopterSpinner));
@@ -279,6 +281,8 @@ final class PlanDialog {
     private void syncControls(MissionPlan plan) {
         syncing = true;
         try {
+            // The area needs at least this many drones (it depends on the search pattern): do not offer fewer.
+            ((SpinnerNumberModel) droneSpinner.getModel()).setMinimum(Math.min(plan.drones().size(), Math.max(1, plan.minDrones())));
             droneSpinner.setValue(plan.drones().size());
             robodogSpinner.setValue(plan.decision().robodogs());
             helicopterSpinner.setValue(Math.max(1, plan.decision().helicopters()));

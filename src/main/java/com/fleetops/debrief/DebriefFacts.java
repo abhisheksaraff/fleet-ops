@@ -24,10 +24,15 @@ import java.util.regex.Pattern;
  * @param robodogs how many robodogs were sent
  * @param helicopters how many helicopters were sent
  * @param operatorChange what the operator changed in the AI's plan, or empty
+ * @param minDrones the fewest drones that could search the area, or 0 if not known
+ * @param maxDrones the most drones that could have been sent, or 0 if not known
+ * @param maxHelicopters how many helicopters the fleet has, or 0 if not known
+ * @param maxRobodogs how many robodogs the rover carries, or 0 if not known
  */
 record DebriefFacts(
         MissionStatus status, int people, int rescued, int foundNotRescued, int notFound, double minutes, List<String> notes,
-        int drones, int robodogs, int helicopters, String operatorChange) {
+        int drones, int robodogs, int helicopters, String operatorChange,
+        int minDrones, int maxDrones, int maxHelicopters, int maxRobodogs) {
 
     private static final Pattern STATUS = Pattern.compile("^Outcome: (\\w+)", Pattern.MULTILINE);
     private static final Pattern PEOPLE = Pattern.compile("^People in the area: (\\d+)", Pattern.MULTILINE);
@@ -38,6 +43,10 @@ record DebriefFacts(
     private static final Pattern ROBODOGS = Pattern.compile("^Robodogs sent: (\\d+)", Pattern.MULTILINE);
     private static final Pattern HELICOPTERS = Pattern.compile("^Helicopters sent: (\\d+)", Pattern.MULTILINE);
     private static final Pattern CHANGE = Pattern.compile("^Operator changed the plan: (.+)$", Pattern.MULTILINE);
+    private static final Pattern MIN_DRONES = Pattern.compile("^Fewest drones that can search the area: (\\d+)", Pattern.MULTILINE);
+    private static final Pattern MAX_DRONES = Pattern.compile("^Drones available: (\\d+)", Pattern.MULTILINE);
+    private static final Pattern MAX_HELICOPTERS = Pattern.compile("^Helicopters available: (\\d+)", Pattern.MULTILINE);
+    private static final Pattern MAX_ROBODOGS = Pattern.compile("^Robodogs available: (\\d+)", Pattern.MULTILINE);
     private static final Pattern MINUTES = Pattern.compile("^Simulated minutes: ([0-9.]+)", Pattern.MULTILINE);
 
     DebriefFacts {
@@ -49,7 +58,8 @@ record DebriefFacts(
     static DebriefFacts of(MissionReport report) {
         return new DebriefFacts(report.status(), report.people(), report.rescued(), report.foundNotRescued(),
                 report.notFound(), report.seconds() / 60.0, report.notes(),
-                report.drones(), report.robodogs(), report.helicopters(), report.operatorChange());
+                report.drones(), report.robodogs(), report.helicopters(), report.operatorChange(),
+                report.minDrones(), report.maxDrones(), report.maxHelicopters(), report.maxRobodogs());
     }
 
     /** The numbers as lines of text, one fact per line. */
@@ -58,7 +68,23 @@ record DebriefFacts(
                 "Outcome: %s%nPeople in the area: %d%nRescued: %d%nFound but not rescued: %d%nNever found: %d%n"
                         + "Simulated minutes: %.1f%nDrones sent: %d%nRobodogs sent: %d%nHelicopters sent: %d%n",
                 status, people, rescued, foundNotRescued, notFound, minutes, drones, robodogs, helicopters);
-        return operatorChange.isEmpty() ? header : header + "Operator changed the plan: " + operatorChange + "\n";
+        StringBuilder text = new StringBuilder(header);
+        if (minDrones > 0) {
+            text.append("Fewest drones that can search the area: ").append(minDrones).append('\n');
+        }
+        if (maxDrones > 0) {
+            text.append("Drones available: ").append(maxDrones).append('\n');
+        }
+        if (maxHelicopters > 0) {
+            text.append("Helicopters available: ").append(maxHelicopters).append('\n');
+        }
+        if (maxRobodogs > 0) {
+            text.append("Robodogs available: ").append(maxRobodogs).append('\n');
+        }
+        if (!operatorChange.isEmpty()) {
+            text.append("Operator changed the plan: ").append(operatorChange).append('\n');
+        }
+        return text.toString();
     }
 
     /** Reads a header written by {@link #toHeader()}; a missing line counts as zero. */
@@ -74,7 +100,8 @@ record DebriefFacts(
         }
         return new DebriefFacts(status, whole(PEOPLE, header), whole(RESCUED, header), whole(FOUND, header),
                 whole(HIDDEN, header), Double.parseDouble(find(MINUTES, header, "0")), List.of(),
-                whole(DRONES, header), whole(ROBODOGS, header), whole(HELICOPTERS, header), find(CHANGE, header, "").strip());
+                whole(DRONES, header), whole(ROBODOGS, header), whole(HELICOPTERS, header), find(CHANGE, header, "").strip(),
+                whole(MIN_DRONES, header), whole(MAX_DRONES, header), whole(MAX_HELICOPTERS, header), whole(MAX_ROBODOGS, header));
     }
 
     private static int whole(Pattern pattern, String text) {

@@ -26,9 +26,18 @@ final class DebriefPrompts {
             - Talk about what actually happened: how many people, how long it took, which units were sent, \
             and any change the operator made to the plan. An operator change means the first plan was \
             wrong, so list it under "problems".
+            - "Simulated minutes" counts everything until the units are home again, including the flight back.
+            - The mission may have been stopped by the operator ("Outcome: ABORTED"). Then people who were \
+            not found are the result of stopping early, never the reason. Never write that the mission was \
+            aborted because of anything.
             - "nextTime" must hold 1 to 3 concrete changes to the fleet or the search (more or fewer \
-            helicopters, more or fewer drones, robodogs, the other search pattern, a closer base), never \
-            general advice, even when the mission went well (for example, whether fewer units would do).
+            helicopters, more or fewer drones, more or fewer robodogs, the other search pattern), never \
+            general advice, even when the mission went well. Give the reason after the change, as in \
+            "Send 5 drones instead of 4, because 2 people were never found."
+            - Respect the limits you are given. Never suggest fewer drones than "Fewest drones that can \
+            search the area" or more than "Drones available"; never suggest more helicopters or robodogs than \
+            are available, fewer than 1 helicopter, or the same number that was already sent. If a number \
+            cannot change, suggest the other search pattern or leave it out.
 
             Answer with exactly one JSON object and nothing else:
             {"summary": "one or two sentences on how the mission went",

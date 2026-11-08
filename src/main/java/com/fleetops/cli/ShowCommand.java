@@ -35,7 +35,7 @@ final class ShowCommand extends AbstractAppCommand {
         out.println("  Area      : centre " + CliFormat.point(i.area().center())
                 + ", " + String.format(java.util.Locale.ROOT, "%.1f km square", i.area().sideKm()));
         out.println("  Reported  : " + i.reportedAt());
-        out.println("  Source    : " + i.sourceUrl().orElse("-"));
+        out.println("  Source    : " + CliFormat.clip(i.sourceUrl().orElse("-"), 80));
         out.println("  Summary   : " + i.summary());
         return ExitCodes.OK;
     }

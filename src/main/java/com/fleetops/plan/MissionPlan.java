@@ -29,6 +29,8 @@ import java.util.Objects;
  * @param robodogSweeps the small square each robodog searches around its drop-off point
  * @param commands every command, ready to enqueue
  * @param notes things the compiler changed or noticed, for the operator
+ * @param minDrones the fewest drones that can search this area on one battery each (with this search pattern)
+ * @param maxDrones the most drones that can be used: those that are ready, up to the number of parts the square is cut into
  */
 public record MissionPlan(
         Incident incident,
@@ -39,7 +41,9 @@ public record MissionPlan(
         Map<Drone, List<GeoArea>> sweeps,
         Map<Robodog, GeoArea> robodogSweeps,
         List<MissionCommand> commands,
-        List<String> notes) {
+        List<String> notes,
+        int minDrones,
+        int maxDrones) {
 
     public MissionPlan {
         Objects.requireNonNull(incident, "incident");
