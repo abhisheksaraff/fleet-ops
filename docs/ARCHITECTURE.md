@@ -36,6 +36,7 @@
 | Strategy (articles) | `ArticleEnricher` (`GoogleArticleEnricher`, `NONE`) | Interchangeable ways to give the AI more than a headline: download the article behind a Google link, or leave the item as it is. |
 | Repository | `IncidentRepository` (`InMemoryIncidentRepository`, `JdbcIncidentRepository`) | Storage hidden behind an interface; swapped by `DB_URL`. |
 | Facade | `MissionControl`, `IntelligenceService`, `AppContext` | One simple entry point over many collaborating classes. |
+| Chain of Responsibility | `FallbackLlmClient` (a chain of `RetryingLlmClient` around `GeminiClient`) | A request goes to the first model; if its daily allowance is used up (`LlmException.isQuotaExhausted`), the next model in `LLM_FALLBACK_MODELS` gets it. Other failures are not passed along. |
 
 ## Key decisions
 

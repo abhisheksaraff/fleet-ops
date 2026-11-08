@@ -27,6 +27,7 @@ public final class AppConfig {
     public static final String KEY_LLM_PROVIDER = "LLM_PROVIDER";
     public static final String KEY_LLM_API_KEY = "LLM_API_KEY";
     public static final String KEY_LLM_MODEL = "LLM_MODEL";
+    public static final String KEY_LLM_FALLBACK_MODELS = "LLM_FALLBACK_MODELS";
     public static final String KEY_LLM_BASE_URL = "LLM_BASE_URL";
     public static final String KEY_DB_URL = "DB_URL";
     public static final String KEY_MAP_TILES = "MAP_TILES";
@@ -56,6 +57,7 @@ public final class AppConfig {
     private final LlmProviderType llmProvider;
     private final String llmApiKey; // may be null
     private final String llmModel; // may be null
+    private final List<String> llmFallbackModels;
     private final String llmBaseUrl;
     private final String dbUrl;
     private final String mapTiles;
@@ -71,6 +73,7 @@ public final class AppConfig {
             LlmProviderType llmProvider,
             String llmApiKey,
             String llmModel,
+            List<String> llmFallbackModels,
             String llmBaseUrl,
             String dbUrl,
             String mapTiles,
@@ -84,6 +87,7 @@ public final class AppConfig {
         this.llmProvider = llmProvider;
         this.llmApiKey = llmApiKey;
         this.llmModel = llmModel;
+        this.llmFallbackModels = llmFallbackModels;
         this.llmBaseUrl = llmBaseUrl;
         this.dbUrl = dbUrl;
         this.mapTiles = mapTiles;
@@ -135,6 +139,7 @@ public final class AppConfig {
                 provider,
                 apiKey,
                 pick(KEY_LLM_MODEL, environment, fileValues),
+                splitList(pick(KEY_LLM_FALLBACK_MODELS, environment, fileValues)),
                 orDefault(pick(KEY_LLM_BASE_URL, environment, fileValues), DEFAULT_LLM_BASE_URL),
                 orDefault(pick(KEY_DB_URL, environment, fileValues), DEFAULT_DB_URL),
                 orDefault(pick(KEY_MAP_TILES, environment, fileValues), DEFAULT_MAP_TILES),
@@ -161,6 +166,11 @@ public final class AppConfig {
 
     public Optional<String> llmModel() {
         return Optional.ofNullable(llmModel);
+    }
+
+    /** Other models of the same provider to try, in order, when the main one has used up its daily allowance. */
+    public List<String> llmFallbackModels() {
+        return llmFallbackModels;
     }
 
     public String llmBaseUrl() {
@@ -215,6 +225,7 @@ public final class AppConfig {
                 System.lineSeparator(),
                 "LLM provider : " + llmProvider.name().toLowerCase(Locale.ROOT),
                 "LLM model    : " + llmModel().orElse("(provider default)"),
+                "LLM fallback : " + (llmFallbackModels.isEmpty() ? "(none)" : String.join(", ", llmFallbackModels)),
                 "LLM base URL : " + llmBaseUrl,
                 "LLM API key  : " + (llmApiKey != null ? "set" : "not set"),
                 "Database URL : " + dbUrl,

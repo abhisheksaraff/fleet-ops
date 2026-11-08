@@ -83,10 +83,29 @@ public final class GeminiClient implements LlmClient {
 
     private LlmException httpError(HttpPoster.Reply reply) {
         String detail = Json.path(tryParse(reply.body()), "error", "message").map(Object::toString).orElseGet(() -> snippet(reply.body()));
-        boolean retryable = reply.status() == 408 || reply.status() == 429 || reply.status() >= 500;
+        boolean quota = reply.status() == 429 && isDailyQuota(detail);
+        // A used-up daily allowance will not come back in a few seconds, so retrying the same model is pointless.
+        boolean retryable = !quota && (reply.status() == 408 || reply.status() == 429 || reply.status() >= 500);
         String hint = reply.status() == 400 || reply.status() == 401 || reply.status() == 403
                 ? " (check LLM_API_KEY and LLM_MODEL)" : "";
-        return new LlmException("Gemini answered HTTP " + reply.status() + ": " + detail + hint, retryable);
+        return new LlmException("Gemini answered HTTP " + reply.status() + ": " + detail + hint, retryable, quota);
+    }
+
+    private static final Pattern RETRY_IN = Pattern.compile("retry in (?:(\\d+)h)?(?:(\\d+)m)?", Pattern.CASE_INSENSITIVE);
+
+    /** A 429 that says "per day", or asks to retry in more than a few minutes, is the daily allowance running out. */
+    static boolean isDailyQuota(String detail) {
+        String text = detail == null ? "" : detail.toLowerCase(java.util.Locale.ROOT);
+        if (text.contains("per day") || text.contains("perday")) {
+            return true;
+        }
+        java.util.regex.Matcher m = RETRY_IN.matcher(text);
+        if (m.find()) {
+            int hours = m.group(1) == null ? 0 : Integer.parseInt(m.group(1));
+            int minutes = m.group(2) == null ? 0 : Integer.parseInt(m.group(2));
+            return hours * 60 + minutes >= 5;
+        }
+        return false;
     }
 
     private String readAnswer(String responseBody) {

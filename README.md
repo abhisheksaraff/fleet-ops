@@ -216,6 +216,7 @@ CARTO_API_KEY=YOUR_FREE_CARTO_KEY_OR_LEAVE_BLANK
 | `LLM_PROVIDER` | `mock`, `gemini` or `ollama` | `mock` |
 | `LLM_API_KEY` | API key (required for `gemini`) | none |
 | `LLM_MODEL` | Model name | provider default |
+| `LLM_FALLBACK_MODELS` | Gemini only: other models to try, in order, when the main one has used up its free daily allowance (e.g. `gemini-2.5-flash-lite`) | none |
 | `LLM_BASE_URL` | Ollama server URL | `http://localhost:11434` |
 | `DB_URL` | JDBC URL of the incident database, or `memory` for no saving | `jdbc:h2:./data/fleetops` |
 | `DB_USER` / `DB_PASSWORD` | Database login (only needed outside the embedded H2 default) | `sa` / empty |
