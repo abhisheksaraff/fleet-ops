@@ -1,73 +1,116 @@
-# FleetOps
+# FleetOps: AI-Planned Multi-Robot Rescue Simulation
 
-LLM-driven multi-robot rescue mission control, built for EECS 3311 (Software Design).
-The application reads disaster news, uses an AI agent to verify and plan a response, checks every
-action with a deterministic safety gate, and shows drones, helicopters and survivors on a map.
+[![Java](https://img.shields.io/badge/Java_21-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)](https://openjdk.org/)
+[![Maven](https://img.shields.io/badge/Maven-C71A36?style=for-the-badge&logo=apachemaven&logoColor=white)](https://maven.apache.org/)
+[![Swing](https://img.shields.io/badge/Swing_+_FlatLaf-4B8BBE?style=for-the-badge&logo=openjdk&logoColor=white)](https://www.formdev.com/flatlaf/)
+[![H2](https://img.shields.io/badge/H2_Database-1021FF?style=for-the-badge)](https://h2database.com/)
+[![Gemini](https://img.shields.io/badge/Gemini_2.5_Flash-8E75B2?style=for-the-badge&logo=googlegemini&logoColor=white)](https://ai.google.dev/)
+[![picocli](https://img.shields.io/badge/picocli-CLI-2E7D32?style=for-the-badge)](https://picocli.info/)
 
-FleetOps is a playful simulation: it is meant to show software-design patterns working together
-(see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)), not to control real robots.
+------------------------------------------------------------------------
 
-## How it works
+## Overview
 
-1. **Scan** - news items (Google News, public Telegram channels, or a built-in offline demo set) are
-   collected by topic: flood, famine, fire, earthquake. One new item per topic per scan.
-2. **Verify** - the AI reads each item, decides whether it is a real incident and extracts structured
-   data (place, latitude/longitude, severity, people affected). The answer is validated before use.
-   Duplicates are detected, and incidents are saved without repeats.
-3. **Plan** - the AI chooses how many drones, which search pattern, how many robodogs and how many
-   helicopters to send, based on severity and the units that are ready. If the AI is unavailable or
-   answers badly, fixed rules take over. **You can change the plan before approving it** (see below);
-   it is checked again against batteries and range after every change.
-4. **Safety check** - every command is checked by a deterministic safety gate (battery reserve,
-   service area, unit readiness) before it runs. The AI cannot bypass it.
-5. **Simulate** - a rover drives to the south edge of the incident square, drones sweep the square
-   and reveal people, robodogs are dropped off and walk circles around their drop-off points to find
-   people close to the ground, helicopters pick them up. The incident is marked completed when
-   everyone is rescued.
-6. **Debrief** - when a mission ends, the AI writes a short debrief: a summary, what went well,
-   what went wrong and what to do next time. It only sees the program's own numbers, never the news
-   text, and if the AI is unavailable fixed rules write the debrief instead.
+FleetOps is a multi-agent rescue simulation. It reads disaster news, uses a **Large Language Model
+(LLM)** to verify each story and plan a response, checks every action with a deterministic safety
+gate, and plays the rescue out on a live map with drones, robodogs, rovers and helicopters.
 
-The program works with no key and no network: the defaults use a mock AI and demo news.
+It moves from raw news, to AI verification, to an AI-written mission plan, to **human approval**, to
+a simulated rescue, to an AI debrief. It is a playful simulation, not software for controlling real
+robots.
 
-## Prerequisites
+![FleetOps demo](docs/demo.gif)
 
-- Java 21 or newer (`java -version`)
-- Maven 3.9+ (IntelliJ IDEA bundles one; for the terminal, install it with `brew install maven`)
+<!-- Placeholder: record the map window and save it as docs/demo.gif. -->
 
-## Local configuration
+The program works with no key and no network: the defaults use a mock AI and a built-in set of demo
+stories.
 
-Secrets live in a local `.env` file that is **gitignored**. Never commit a real API key.
+------------------------------------------------------------------------
 
-```bash
-cp .env.example .env
+## System Flow Diagram
+
+``` mermaid
+graph TD
+
+    %% -------- Phase 1 --------
+    subgraph "Phase 1: Ingestion & Verification"
+        A[News Sources: Google News, Telegram, Demo] -->|One new item per topic| B[Article Enricher]
+        B -->|Headline plus full article text| C[Gemini]
+        C -->|Verdict, place, severity, people| D{Real incident?}
+        D -->|Yes, new| E[(H2 Incident Database)]
+        D -->|Duplicate or rejected| F[Skipped with a reason]
+    end
+
+    %% -------- Phase 2 --------
+    subgraph "Phase 2: Planning & Approval"
+        E -->|Select an incident| G[AI Response Planner]
+        G -->|Drones, pattern, robodogs, helicopters| H[Clamp and sanity checks]
+        H -->|Rules take over if the AI fails| I[Plan Compiler + Safety Gate]
+        I -->|Proposed plan| J[Operator: edit, launch or cancel]
+        J -->|Edited plan is checked again| I
+    end
+
+    %% -------- Phase 3 --------
+    subgraph "Phase 3: Simulation & Debrief"
+        J -->|Launch| K[Command Queue per unit]
+        K --> L[Simulation Engine]
+        L -->|Survivors found and rescued| M[Mission Report]
+        M --> N[AI Debrief]
+        N -->|Rules write it if the AI fails| O[GUI card and CLI output]
+    end
 ```
 
-Then edit `.env`. The default `LLM_PROVIDER=mock` needs no key and no network. To use Gemini, set
-`LLM_PROVIDER=gemini` and put your key in `LLM_API_KEY`.
+------------------------------------------------------------------------
 
-| Key | Meaning | Default |
-|---|---|---|
-| `LLM_PROVIDER` | `mock`, `gemini` or `ollama` | `mock` |
-| `LLM_API_KEY` | API key (required for `gemini`) | none |
-| `LLM_MODEL` | Model name | provider default |
-| `LLM_BASE_URL` | Ollama server URL | `http://localhost:11434` |
-| `DB_URL` | JDBC URL of the incident database, or `memory` for no saving | `jdbc:h2:./data/fleetops` |
-| `DB_USER` / `DB_PASSWORD` | Database login (only needed outside the embedded H2 default) | `sa` / empty |
-| `NEWS_SOURCES` | `demo`, `google`, `telegram` (comma separated) | `demo` |
-| `TELEGRAM_CHANNELS` | Public channel names, used when `telegram` is a source | none |
-| `NEWS_GOOGLE_EDITION` | Google News language and country | `hl=en-CA&gl=CA&ceid=CA:en` |
-| `NEWS_TOPICS` | `flood`, `famine`, `fire`, `earthquake` (blank = all) | all four |
-| `MAP_TILES` | Map tile source: `dark` (CARTO Dark Matter, needs `CARTO_API_KEY`) or `osm` (OpenStreetMap) | `dark` |
-| `CARTO_API_KEY` | Free CARTO basemap key from [carto.com/basemaps/apikey](https://carto.com/basemaps/apikey); without it `dark` falls back to OpenStreetMap | none |
+## Core Competencies & Implementation
 
-## Run
+### 1. Prompt Engineering & LLM Reliability
 
-```bash
-mvn -q compile                             # build (downloads dependencies the first time)
-mvn -q exec:java                           # start the GUI
-mvn -q exec:java -Dexec.mainClass=com.fleetops.cli.FleetOpsCli -Dexec.args="config"   # CLI
-```
+- Role-based prompts for three jobs: verifying news, planning a response and writing a debrief.
+- Strict JSON answers: every model reply is parsed and validated, a bad reply gets one repair attempt, and a second bad reply falls back to fixed rules.
+- Untrusted text is fenced: article text is passed as data, never as instructions.
+- The AI proposes and the program decides: unit counts are clamped to what is ready, at least one helicopter is always planned when people are expected, and the plan says when it changed the AI's numbers.
+- Debriefs are written from the program's own numbers. Claims about zero counts ("nobody was left behind") are filtered out, and a debrief must always include next-time lessons.
+
+### 2. News Pipeline
+
+- Topics: flood, famine, fire, earthquake. One unseen item per topic per scan.
+- Google News links are decoded to the real article, and the article text is downloaded so the AI reads more than a headline. If any step fails, the headline and short description are used instead.
+- Outlet names are stripped from headlines (" - CBC" and similar).
+- Several feeds act as one source, in the order you list them: the first listed feed is read first, so `NEWS_SOURCES=google,demo` scans real news before the demo stories.
+- Duplicates are caught by a normalised source key that is unique in the database.
+
+### 3. Deterministic Safety & Simulation
+
+- A safety gate checks every command from the AI or the operator for battery reserve, service area and unit readiness before it runs.
+- Fixed one-second ticks and a seeded random generator make runs repeatable.
+- Commands for one unit run in order, different units run in parallel, and a failed command cancels the rest of that unit's queue.
+
+------------------------------------------------------------------------
+
+## The 3-Step Pipeline
+
+### 1. Scan & Verify
+
+- Collects news, enriches it with article text, and has the AI decide if it is a real incident
+- Extracts place, latitude/longitude, severity and people affected
+- Stores new incidents and skips duplicates
+
+### 2. Plan & Approve
+
+- The AI chooses drones, search pattern (lawnmower or spiral), robodogs and helicopters
+- The operator can edit any number and the plan is checked again; **Launch** stays disabled if it cannot be carried out
+- Fixed rules take over if the AI is unavailable
+
+### 3. Simulate & Debrief
+
+- A rover drives to the incident, drones sweep the area and reveal people, robodogs are dropped off and walk circles to find people close to the ground, helicopters carry them out
+- The AI writes a short debrief: summary, what went well, problems and what to do next time
+
+------------------------------------------------------------------------
+
+## Command Reference
 
 ### Command line
 
@@ -89,6 +132,7 @@ Every command is run as `mvn -q exec:java -Dexec.mainClass=com.fleetops.cli.Flee
 `--send-drones N`, `--send-robodogs N` (0 for none), `--send-helicopters N` and `--pattern lawnmower|spiral`.
 The changed plan is compiled and checked again, and refused with a reason if the batteries or the
 rover's range cannot cover it. The plan text then says what the operator changed.
+
 Exit codes: 0 ok, 1 configuration error, 2 bad usage, 3 incident not found, 4 failed or not completed.
 
 Example session with the offline demo news:
@@ -131,6 +175,67 @@ run 2 --send-drones 3 --send-robodogs 1 --pattern spiral --dry-run
 
 In IntelliJ you can also run `FleetOpsGui` or `FleetOpsCli` directly from their `main` methods.
 
+------------------------------------------------------------------------
+
+## Getting Started
+
+### Prerequisites
+
+- Java 21 or newer (`java -version`)
+- Maven 3.9+ (IntelliJ IDEA bundles one; for the terminal, install it with `brew install maven`)
+
+### Clone the Repository
+
+``` bash
+git clone https://github.com/abhisheksaraff/fleet-ops.git
+cd fleet-ops
+```
+
+### Environment Configuration
+
+Secrets live in a local `.env` file that is **gitignored**. Never commit a real API key.
+
+``` bash
+cp .env.example .env
+```
+
+The default `LLM_PROVIDER=mock` needs no key and no network. To use Gemini, set `LLM_PROVIDER=gemini`
+and put your key from [Google AI Studio](https://aistudio.google.com/) in `LLM_API_KEY`. A typical
+setup with real news and Gemini looks like this (with your own keys):
+
+``` env
+LLM_PROVIDER=gemini
+LLM_API_KEY=YOUR_LOCAL_API_KEY_HERE
+NEWS_SOURCES=google,demo
+MAP_TILES=dark
+CARTO_API_KEY=YOUR_FREE_CARTO_KEY_OR_LEAVE_BLANK
+```
+
+| Key | Meaning | Default |
+|---|---|---|
+| `LLM_PROVIDER` | `mock`, `gemini` or `ollama` | `mock` |
+| `LLM_API_KEY` | API key (required for `gemini`) | none |
+| `LLM_MODEL` | Model name | provider default |
+| `LLM_BASE_URL` | Ollama server URL | `http://localhost:11434` |
+| `DB_URL` | JDBC URL of the incident database, or `memory` for no saving | `jdbc:h2:./data/fleetops` |
+| `DB_USER` / `DB_PASSWORD` | Database login (only needed outside the embedded H2 default) | `sa` / empty |
+| `NEWS_SOURCES` | `demo`, `google`, `telegram` (comma separated, read in the order listed) | `demo` |
+| `TELEGRAM_CHANNELS` | Public channel names, used when `telegram` is a source | none |
+| `NEWS_GOOGLE_EDITION` | Google News language and country | `hl=en-CA&gl=CA&ceid=CA:en` |
+| `NEWS_TOPICS` | `flood`, `famine`, `fire`, `earthquake` (blank = all four) | all four |
+| `MAP_TILES` | Map tile source: `dark` (CARTO Dark Matter, needs `CARTO_API_KEY`) or `osm` (OpenStreetMap) | `dark` |
+| `CARTO_API_KEY` | Free CARTO basemap key from [carto.com/basemaps/apikey](https://carto.com/basemaps/apikey); without it `dark` falls back to OpenStreetMap | none |
+
+### Build and Run
+
+``` bash
+mvn -q compile                             # build (downloads dependencies the first time)
+mvn -q exec:java                           # start the GUI
+mvn -q exec:java -Dexec.mainClass=com.fleetops.cli.FleetOpsCli -Dexec.args="config"   # CLI
+```
+
+------------------------------------------------------------------------
+
 ## Design
 
 The core (incidents, fleet, simulation, commands, safety gate, mission control) depends only on
@@ -145,6 +250,13 @@ swapped through configuration:
 | News feeds | `NEWS_SOURCES`; a new feed is one class implementing `NewsSource` |
 | Map tiles | `MapTiles` (`dark` and `osm`) |
 
+The design patterns used, with the classes that implement them, are listed in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+------------------------------------------------------------------------
+
+## Project Structure
+
 Package overview (`src/main/java/com/fleetops/`):
 
 | Package | Role |
@@ -153,15 +265,14 @@ Package overview (`src/main/java/com/fleetops/`):
 | `sim` | Fixed-step simulation engine, world and survivor placement |
 | `command`, `strategy` | Mission commands with a per-unit command queue; search patterns |
 | `safety` | Rules and the policy that checks commands |
-| `news`, `ai`, `intel` | News sources, LLM clients, and the verify-and-store pipeline |
+| `news`, `ai`, `intel` | News sources, article text, LLM clients, and the verify-and-store pipeline |
 | `plan`, `mission` | AI/rule-based planning, and `MissionControl` which runs missions |
 | `debrief` | AI-written mission debrief, with a rule-based fallback |
 | `repository` | In-memory and JDBC incident storage |
 | `app`, `config` | Configuration and the composition root |
 | `cli`, `gui` | The two user interfaces |
 
-The design patterns used, with the classes that implement them, are listed in
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+------------------------------------------------------------------------
 
 ## Troubleshooting
 
@@ -170,14 +281,22 @@ The design patterns used, with the classes that implement them, are listed in
 - **"API KEY REQUIRED" squares on the map** - CARTO no longer serves tiles without a key. Request a free one at [carto.com/basemaps/apikey](https://carto.com/basemaps/apikey), put it in `.env` as `CARTO_API_KEY=...` and restart. Until then the app shows OpenStreetMap, or set `MAP_TILES=osm`.
 - **The map is grey** - tiles come from CARTO / OpenStreetMap and need internet access. Incidents and units are still drawn.
 - **Plan fails with "no drone is ready"** - the units are busy or low on battery; press **Reset fleet** (GUI) or start a new `run` (CLI), which begins with a fresh fleet.
+- **Only demo stories show up** - set `NEWS_SOURCES=google,demo` so real news is read first, and run `scan -v` to see why each item was accepted or rejected.
 - **Start fresh** - run `reset` (CLI) or press **Clear finished** (GUI), or delete the `data/` folder (the local database, gitignored).
 - **An incident is stuck as IN_PROGRESS** (the program was killed mid-mission) - run `reset` to remove it.
 
-## Known limitations
+## Known Limitations
 
-- There are no automated tests in this repository yet; the code was checked with throwaway test programs.
+- There is no automated test suite in this repository yet.
 - Live Gemini, Ollama, Google News and Telegram access depends on your keys, network and the
-  services' current behaviour; the offline demo mode is the dependable path.
+  services' current behaviour; Google may change how its article links work, in which case the AI
+  reads the headline and short description only. The offline demo mode is the dependable path.
 - The simulation is deliberately simple: straight-line flight and walking, no wind or terrain, one
   search pattern per mission. Robodogs always walk circles from drop-off points along the south edge
   of the square; the operator chooses how many, not where.
+
+------------------------------------------------------------------------
+
+# FleetOps
+
+Turning disaster headlines into planned, checked and debriefed rescue missions.
