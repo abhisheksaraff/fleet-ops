@@ -16,6 +16,7 @@ import com.fleetops.intel.LlmNewsAnalyzer;
 import com.fleetops.intel.MockIntelligence;
 import com.fleetops.news.CompositeNewsSource;
 import com.fleetops.news.DemoNewsSource;
+import com.fleetops.news.GoogleArticleEnricher;
 import com.fleetops.news.GoogleNewsRssSource;
 import com.fleetops.news.HttpFetcher;
 import com.fleetops.news.JdkHttpFetcher;
@@ -63,6 +64,7 @@ public final class AppContext implements AutoCloseable {
     private IncidentRepository repository;
     private NewsSource newsSource;
     private IntelligenceService intelligence;
+    private final HttpFetcher fetcher = new JdkHttpFetcher();
     private ResponsePlanner planner;
     private MissionDebriefer debriefer;
     private boolean keepOpen;
@@ -139,7 +141,8 @@ public final class AppContext implements AutoCloseable {
     public synchronized IntelligenceService intelligence() {
         if (intelligence == null) {
             intelligence = new IntelligenceService(
-                    newsSource(), new LlmNewsAnalyzer(llm()), repository(), IntelligenceService.Settings.defaults(), clock);
+                    newsSource(), new GoogleArticleEnricher(fetcher), new LlmNewsAnalyzer(llm()), repository(),
+                    IntelligenceService.Settings.defaults(), clock);
         }
         return intelligence;
     }
@@ -213,7 +216,6 @@ public final class AppContext implements AutoCloseable {
     }
 
     private NewsSource buildNewsSource() {
-        HttpFetcher fetcher = new JdkHttpFetcher();
         List<NewsSource> sources = new ArrayList<>();
         for (NewsSourceType type : config.newsSources()) {
             switch (type) {

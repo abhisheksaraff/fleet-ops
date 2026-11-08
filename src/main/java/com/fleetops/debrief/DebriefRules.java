@@ -40,6 +40,9 @@ final class DebriefRules {
         if (f.rescued() > 0) {
             out.add(f.rescued() + " " + people(f.rescued()) + " reached safety.");
         }
+        if (f.robodogs() > 0 && f.rescued() > 0) {
+            out.add(f.robodogs() + (f.robodogs() == 1 ? " robodog" : " robodogs") + " searched the ground near the drop-off alongside " + f.drones() + " drones.");
+        }
         if (f.people() > 0 && f.rescued() == f.people()) {
             out.add("Nobody was left behind.");
         } else if (f.rescued() > 0 && f.foundNotRescued() == 0) {
@@ -50,7 +53,10 @@ final class DebriefRules {
 
     private static List<String> problems(DebriefFacts f) {
         List<String> out = new ArrayList<>(f.notes());
-        if (out.isEmpty()) {
+        if (!f.operatorChange().isEmpty()) {
+            out.add("The operator had to change the plan: " + f.operatorChange() + ".");
+        }
+        if (out.isEmpty() || (out.size() == 1 && !f.operatorChange().isEmpty())) {
             if (f.foundNotRescued() > 0) {
                 out.add(f.foundNotRescued() + " " + people(f.foundNotRescued()) + " " + was(f.foundNotRescued()) + " found but not picked up.");
             }
@@ -75,8 +81,16 @@ final class DebriefRules {
         if (f.status() == MissionStatus.ABORTED && f.rescued() < f.people()) {
             out.add("Plan the incident again to reach the people who are left.");
         }
+        if (!f.operatorChange().isEmpty()) {
+            out.add("Have the planner choose the operator's numbers from the start, so the first plan can be launched as it is.");
+        }
         if (out.isEmpty() && f.people() > 0 && f.rescued() == f.people()) {
-            out.add("The same fleet size worked; use it again for an incident like this.");
+            out.add(f.drones() > 0
+                    ? "The same fleet size worked (" + f.drones() + " drones, " + f.helicopters() + " helicopters); try one drone fewer to see if it still finishes in time."
+                    : "The same fleet size worked; use it again for an incident like this.");
+        }
+        if (out.isEmpty()) {
+            out.add("Plan the incident again with more drones and helicopters if people are left.");
         }
         return out;
     }

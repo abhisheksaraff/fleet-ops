@@ -79,7 +79,10 @@ public final class LlmResponsePlanner implements ResponsePlanner {
             rationale.append(" [AI asked for ").append(askedDrones).append(" drones; only ").append(drones).append(" are ready.]");
         }
         int helicopters = Math.min(askedHelicopters, context.availableHelicopters());
-        if (helicopters < askedHelicopters) {
+        if (helicopters == 0 && context.availableHelicopters() > 0) {
+            helicopters = 1;
+            rationale.append(" [Raised to 1 helicopter: people who are found need someone to pick them up.]");
+        } else if (helicopters < askedHelicopters) {
             rationale.append(" [AI asked for ").append(askedHelicopters).append(" helicopters; only ").append(helicopters).append(" are ready.]");
         }
         int robodogs = Math.min(askedRobodogs, context.availableRobodogs());

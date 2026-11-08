@@ -10,7 +10,8 @@ import java.util.stream.Collectors;
 
 /**
  * Several sources used as one. Results are merged, the same article found by two sources is kept
- * once, and the newest comes first. A source that fails is skipped (and logged) so one broken
+ * once, and a source that is listed first comes first (so a real feed listed before the demo feed
+ * is always read before it); within one source the newest comes first. A source that fails is skipped (and logged) so one broken
  * feed does not stop the others; only when every source fails is an exception thrown.
  */
 public final class CompositeNewsSource implements NewsSource {
@@ -34,12 +35,17 @@ public final class CompositeNewsSource implements NewsSource {
             throw new IllegalArgumentException("limit must be at least 1: " + limit);
         }
         Map<String, NewsItem> unique = new LinkedHashMap<>();
+        List<NewsItem> merged = new ArrayList<>();
         List<RuntimeException> failures = new ArrayList<>();
         for (NewsSource source : sources) {
             try {
-                for (NewsItem item : source.fetch(topic, limit)) {
-                    unique.putIfAbsent(item.key(), item);
-                }
+                source.fetch(topic, limit).stream()
+                        .sorted(Comparator.comparing(NewsItem::publishedAt).reversed())
+                        .forEach(item -> {
+                            if (unique.putIfAbsent(item.key(), item) == null) {
+                                merged.add(item);
+                            }
+                        });
             } catch (NewsSourceException e) {
                 failures.add(e);
                 LOG.log(System.Logger.Level.WARNING, "{0} failed: {1}", source.name(), e.getMessage());
@@ -48,9 +54,6 @@ public final class CompositeNewsSource implements NewsSource {
         if (!sources.isEmpty() && failures.size() == sources.size()) {
             throw new NewsSourceException("Every news source failed. First problem: " + failures.get(0).getMessage(), failures.get(0));
         }
-        return unique.values().stream()
-                .sorted(Comparator.comparing(NewsItem::publishedAt).reversed())
-                .limit(limit)
-                .toList();
+        return merged.stream().limit(limit).toList();
     }
 }

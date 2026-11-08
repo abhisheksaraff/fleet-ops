@@ -28,12 +28,12 @@ public final class LlmDebriefer extends AbstractDebriefer {
         String question = DebriefPrompts.user(report, facts);
         String problem;
         try {
-            return read(ask(question, LlmRequest.DEFAULT_TEMPERATURE));
+            return read(ask(question, LlmRequest.DEFAULT_TEMPERATURE), facts);
         } catch (BadAnswerException e) {
             problem = e.getMessage();
         }
         try {
-            return read(ask(DebriefPrompts.repair(question, problem), 0.0));
+            return read(ask(DebriefPrompts.repair(question, problem), 0.0), facts);
         } catch (BadAnswerException e) {
             throw new DebriefException(llm.name() + " gave no usable debrief, even after a second try: " + e.getMessage(), e);
         }
@@ -50,15 +50,33 @@ public final class LlmDebriefer extends AbstractDebriefer {
         }
     }
 
-    private Debrief read(Object json) {
+    private Debrief read(Object json, DebriefFacts facts) {
         if (!(json instanceof Map<?, ?> fields)) {
             throw new BadAnswerException("The answer must be one JSON object");
         }
         if (!(fields.get("summary") instanceof String summary) || summary.isBlank()) {
             throw new BadAnswerException("\"summary\" must be a sentence or two of text");
         }
-        return new Debrief(summary, list(fields, "wentWell"), list(fields, "problems"), list(fields, "nextTime"),
-                llm.name(), true);
+        List<String> next = list(fields, "nextTime");
+        if (next.stream().allMatch(String::isBlank)) {
+            throw new BadAnswerException("\"nextTime\" must hold at least one concrete change to the fleet or the search");
+        }
+        return new Debrief(summary, withoutEmptyClaims(list(fields, "wentWell"), facts),
+                withoutEmptyClaims(list(fields, "problems"), facts), next, llm.name(), true);
+    }
+
+    /** Drops an item that talks about a count that is zero ("no one was never found"), which says nothing. */
+    private static List<String> withoutEmptyClaims(List<String> items, DebriefFacts facts) {
+        return items.stream()
+                .filter(item -> {
+                    String text = item.toLowerCase(java.util.Locale.ROOT);
+                    boolean emptyFound = facts.foundNotRescued() == 0
+                            && (text.contains("found but not rescued") || text.contains("found but not picked up"));
+                    boolean emptyHidden = facts.notFound() == 0
+                            && (text.contains("never found") || text.contains("not found"));
+                    return !emptyFound && !emptyHidden;
+                })
+                .toList();
     }
 
     private static List<String> list(Map<?, ?> fields, String name) {

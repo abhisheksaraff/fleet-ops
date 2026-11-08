@@ -38,6 +38,16 @@ public record ResponseDecision(
         this(drones, strategy, helicopters, 0, rationale, plannedBy);
     }
 
+    /** What the operator changed in the AI's plan, such as "drones 3 to 5, robodogs 1 to 2", if anything. */
+    public java.util.Optional<String> operatorChanges() {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\[Operator changed ([^\\]]*?)\\.\\]").matcher(rationale);
+        String last = null;
+        while (m.find()) {
+            last = m.group(1);
+        }
+        return java.util.Optional.ofNullable(last);
+    }
+
     public ResponseDecision withDrones(int newDrones) {
         return new ResponseDecision(newDrones, strategy, helicopters, robodogs, rationale, plannedBy);
     }

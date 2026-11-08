@@ -20,33 +20,45 @@ import java.util.regex.Pattern;
  * @param notFound how many were never found
  * @param minutes simulated minutes from launch to the end
  * @param notes the operator notes of the report
+ * @param drones how many drones were sent
+ * @param robodogs how many robodogs were sent
+ * @param helicopters how many helicopters were sent
+ * @param operatorChange what the operator changed in the AI's plan, or empty
  */
 record DebriefFacts(
-        MissionStatus status, int people, int rescued, int foundNotRescued, int notFound, double minutes, List<String> notes) {
+        MissionStatus status, int people, int rescued, int foundNotRescued, int notFound, double minutes, List<String> notes,
+        int drones, int robodogs, int helicopters, String operatorChange) {
 
     private static final Pattern STATUS = Pattern.compile("^Outcome: (\\w+)", Pattern.MULTILINE);
     private static final Pattern PEOPLE = Pattern.compile("^People in the area: (\\d+)", Pattern.MULTILINE);
     private static final Pattern RESCUED = Pattern.compile("^Rescued: (\\d+)", Pattern.MULTILINE);
     private static final Pattern FOUND = Pattern.compile("^Found but not rescued: (\\d+)", Pattern.MULTILINE);
     private static final Pattern HIDDEN = Pattern.compile("^Never found: (\\d+)", Pattern.MULTILINE);
+    private static final Pattern DRONES = Pattern.compile("^Drones sent: (\\d+)", Pattern.MULTILINE);
+    private static final Pattern ROBODOGS = Pattern.compile("^Robodogs sent: (\\d+)", Pattern.MULTILINE);
+    private static final Pattern HELICOPTERS = Pattern.compile("^Helicopters sent: (\\d+)", Pattern.MULTILINE);
+    private static final Pattern CHANGE = Pattern.compile("^Operator changed the plan: (.+)$", Pattern.MULTILINE);
     private static final Pattern MINUTES = Pattern.compile("^Simulated minutes: ([0-9.]+)", Pattern.MULTILINE);
 
     DebriefFacts {
         Objects.requireNonNull(status, "status");
         notes = List.copyOf(notes);
+        operatorChange = operatorChange == null ? "" : operatorChange;
     }
 
     static DebriefFacts of(MissionReport report) {
         return new DebriefFacts(report.status(), report.people(), report.rescued(), report.foundNotRescued(),
-                report.notFound(), report.seconds() / 60.0, report.notes());
+                report.notFound(), report.seconds() / 60.0, report.notes(),
+                report.drones(), report.robodogs(), report.helicopters(), report.operatorChange());
     }
 
     /** The numbers as lines of text, one fact per line. */
     String toHeader() {
-        return String.format(Locale.ROOT,
+        String header = String.format(Locale.ROOT,
                 "Outcome: %s%nPeople in the area: %d%nRescued: %d%nFound but not rescued: %d%nNever found: %d%n"
-                        + "Simulated minutes: %.1f%n",
-                status, people, rescued, foundNotRescued, notFound, minutes);
+                        + "Simulated minutes: %.1f%nDrones sent: %d%nRobodogs sent: %d%nHelicopters sent: %d%n",
+                status, people, rescued, foundNotRescued, notFound, minutes, drones, robodogs, helicopters);
+        return operatorChange.isEmpty() ? header : header + "Operator changed the plan: " + operatorChange + "\n";
     }
 
     /** Reads a header written by {@link #toHeader()}; a missing line counts as zero. */
@@ -61,7 +73,8 @@ record DebriefFacts(
             status = MissionStatus.COMPLETED;
         }
         return new DebriefFacts(status, whole(PEOPLE, header), whole(RESCUED, header), whole(FOUND, header),
-                whole(HIDDEN, header), Double.parseDouble(find(MINUTES, header, "0")), List.of());
+                whole(HIDDEN, header), Double.parseDouble(find(MINUTES, header, "0")), List.of(),
+                whole(DRONES, header), whole(ROBODOGS, header), whole(HELICOPTERS, header), find(CHANGE, header, "").strip());
     }
 
     private static int whole(Pattern pattern, String text) {

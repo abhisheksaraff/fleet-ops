@@ -17,6 +17,10 @@ import java.util.Objects;
  * @param ticks simulation steps from launch to the end
  * @param seconds simulated time from launch to the end
  * @param notes what went wrong or was unusual, for the operator
+ * @param drones how many drones were sent
+ * @param robodogs how many robodogs were sent
+ * @param helicopters how many helicopters were sent
+ * @param operatorChange what the operator changed in the AI's plan, or empty if nothing
  */
 public record MissionReport(
         Incident incident,
@@ -27,7 +31,17 @@ public record MissionReport(
         int notFound,
         long ticks,
         double seconds,
-        List<String> notes) {
+        List<String> notes,
+        int drones,
+        int robodogs,
+        int helicopters,
+        String operatorChange) {
+
+    /** A report that does not say which units were sent. */
+    public MissionReport(Incident incident, MissionStatus status, int people, int rescued, int foundNotRescued,
+            int notFound, long ticks, double seconds, List<String> notes) {
+        this(incident, status, people, rescued, foundNotRescued, notFound, ticks, seconds, notes, 0, 0, 0, "");
+    }
 
     public MissionReport {
         Objects.requireNonNull(incident, "incident");
@@ -36,6 +50,7 @@ public record MissionReport(
             throw new IllegalArgumentException("A report needs a finished mission, not " + status);
         }
         notes = List.copyOf(notes);
+        operatorChange = operatorChange == null ? "" : operatorChange;
     }
 
     /** A multi-line summary for the console or the report. */

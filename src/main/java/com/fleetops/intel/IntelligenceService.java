@@ -5,6 +5,7 @@ import com.fleetops.domain.geo.GeoArea;
 import com.fleetops.domain.geo.GeoPoint;
 import com.fleetops.domain.incident.Incident;
 import com.fleetops.domain.incident.IncidentType;
+import com.fleetops.news.ArticleEnricher;
 import com.fleetops.news.NewsCollector;
 import com.fleetops.news.NewsItem;
 import com.fleetops.news.NewsSource;
@@ -60,6 +61,7 @@ public final class IntelligenceService {
         }
     }
 
+    private final ArticleEnricher enricher;
     private final NewsAnalyzer analyzer;
     private final IncidentRepository repository;
     private final Settings settings;
@@ -69,7 +71,14 @@ public final class IntelligenceService {
     private final Map<String, Integer> failures = new HashMap<>();
 
     public IntelligenceService(NewsSource source, NewsAnalyzer analyzer, IncidentRepository repository, Settings settings, Clock clock) {
+        this(source, ArticleEnricher.NONE, analyzer, repository, settings, clock);
+    }
+
+    /** @param enricher fetches more text for an item before the AI reads it */
+    public IntelligenceService(NewsSource source, ArticleEnricher enricher, NewsAnalyzer analyzer, IncidentRepository repository,
+            Settings settings, Clock clock) {
         Objects.requireNonNull(source, "source");
+        this.enricher = Objects.requireNonNull(enricher, "enricher");
         this.analyzer = Objects.requireNonNull(analyzer, "analyzer");
         this.repository = Objects.requireNonNull(repository, "repository");
         this.settings = Objects.requireNonNull(settings, "settings");
@@ -101,7 +110,7 @@ public final class IntelligenceService {
     private IngestOutcome process(NewsItem item) {
         Assessment assessment;
         try {
-            assessment = analyzer.analyze(item);
+            assessment = analyzer.analyze(enricher.enrich(item));
         } catch (LlmException | AnalysisException e) {
             return analysisFailed(item, e);
         }

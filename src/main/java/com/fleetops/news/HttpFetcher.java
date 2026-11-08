@@ -12,4 +12,9 @@ public interface HttpFetcher {
 
     /** @throws IOException if the page cannot be downloaded or the server answers with an error */
     String get(URI uri) throws IOException;
+
+    /** Sends a form or text body and returns the answer; sources that never post need not support it. */
+    default String post(URI uri, String contentType, String body) throws IOException {
+        throw new IOException("This fetcher cannot send POST requests");
+    }
 }

@@ -12,7 +12,9 @@ import java.time.Duration;
 public final class JdkHttpFetcher implements HttpFetcher {
 
     private static final int MAX_CHARS = 5_000_000;
-    private static final String USER_AGENT = "Mozilla/5.0 (compatible; FleetOps/0.1; university project)";
+    /** A browser-like label: some news sites refuse requests from an unknown program. */
+    private static final String USER_AGENT =
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
     private final HttpClient client;
     private final Duration requestTimeout;
@@ -31,12 +33,23 @@ public final class JdkHttpFetcher implements HttpFetcher {
 
     @Override
     public String get(URI uri) throws IOException {
-        HttpRequest request = HttpRequest.newBuilder(uri)
+        return send(builder(uri).GET().build(), uri);
+    }
+
+    @Override
+    public String post(URI uri, String contentType, String body) throws IOException {
+        return send(builder(uri).header("Content-Type", contentType).POST(HttpRequest.BodyPublishers.ofString(body)).build(), uri);
+    }
+
+    private HttpRequest.Builder builder(URI uri) {
+        return HttpRequest.newBuilder(uri)
                 .timeout(requestTimeout)
                 .header("User-Agent", USER_AGENT)
                 .header("Accept", "text/html,application/xml,application/rss+xml;q=0.9,*/*;q=0.8")
-                .GET()
-                .build();
+                .header("Accept-Language", "en-US,en;q=0.9");
+    }
+
+    private String send(HttpRequest request, URI uri) throws IOException {
         try {
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             int status = response.statusCode();

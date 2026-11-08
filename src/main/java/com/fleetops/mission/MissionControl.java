@@ -416,7 +416,11 @@ public final class MissionControl {
                 zone.hiddenCount(),
                 engine.currentTick() - mission.startedAtTick(),
                 engine.elapsedSeconds() - mission.startedAtSeconds(),
-                notes);
+                notes,
+                mission.plan().drones().size(),
+                mission.plan().robodogs().size(),
+                mission.helicopters().size(),
+                mission.plan().decision().operatorChanges().orElse(""));
         mission.finish(status, report);
         dispatcher.release(zone);
 

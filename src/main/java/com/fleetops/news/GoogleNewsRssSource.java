@@ -91,13 +91,22 @@ public final class GoogleNewsRssSource implements NewsSource {
             String outlet = HtmlText.plain(childText(item, "source"));
             items.add(new NewsItem(
                     topic,
-                    title,
+                    withoutOutlet(title, outlet),
                     HtmlText.plain(childText(item, "description")),
                     link,
                     outlet.isEmpty() ? name() : outlet,
                     parseDate(childText(item, "pubDate"))));
         }
         return items;
+    }
+
+    /** Google adds " - Outlet" to every headline; the outlet is kept separately, so it is dropped here. */
+    static String withoutOutlet(String title, String outlet) {
+        String suffix = " - " + outlet;
+        if (!outlet.isEmpty() && title.endsWith(suffix) && title.length() > suffix.length()) {
+            return title.substring(0, title.length() - suffix.length()).stripTrailing();
+        }
+        return title;
     }
 
     private Instant parseDate(String raw) {
