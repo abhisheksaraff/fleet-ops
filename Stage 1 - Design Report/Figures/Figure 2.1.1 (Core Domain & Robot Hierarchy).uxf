@@ -1,0 +1,97 @@
+<diagram program="umletino" version="15.1"><zoom_level>6</zoom_level><element><id>UMLClass</id><coordinates><x>450</x><y>312</y><w>174</w><h>114</h></coordinates><panel_attributes>&lt;&lt;entity&gt;&gt;
+model::TrackedRover
+--
+- payloadCapacity: double
+- attachedRobodog: Robodog
+--
++ traversePath(path: List&lt;Point&gt;): void
++ deploySubUnit(): Robodog
+--
+Responsibilities
+-- Ground vehicle carrying deployable 
+quadruped subunits.</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLClass</id><coordinates><x>684</x><y>612</y><w>210</w><h>114</h></coordinates><panel_attributes>&lt;&lt;strategy&gt;&gt;
+strategy::LawnmowerScanStrategy
+--
+--
++ computePath(bounds: Rectangle): List&lt;Point&gt;
+--
+Responsibilities
+-- Calculates systematic area grid 
+coverage patterns.</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLClass</id><coordinates><x>696</x><y>444</y><w>198</w><h>114</h></coordinates><panel_attributes>&lt;&lt;interface&gt;&gt;
+strategy::SearchStrategy
+--
+--
+/+ computePath(bounds: Rectangle)
+: List&lt;Point&gt;/
+--
+Responsibilities
+-- Common interface for grid 
+coverage algorithms.</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLClass</id><coordinates><x>696</x><y>282</y><w>204</w><h>114</h></coordinates><panel_attributes>&lt;&lt;command&gt;&gt;
+command::ScanAreaCommand
+--
+- drone: ReconDrone
+- targetBounds: Rectangle
+--
++ execute(): boolean
++ getRequiredEnergy(): double
+--
+Responsibilities
+-- Encapsulates aerial reconnaissance 
+	flight instructions.</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLClass</id><coordinates><x>738</x><y>120</y><w>126</w><h>114</h></coordinates><panel_attributes>&lt;&lt;interface&gt;&gt;
+command::Command
+--
+--
+/+ execute(): boolean/
+/+ getRequiredEnergy(): double/
+--
+Responsibilities
+-- Interface for executable robot 
+command operations.</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLClass</id><coordinates><x>444</x><y>480</y><w>174</w><h>114</h></coordinates><panel_attributes>&lt;&lt;entity&gt;&gt;
+model::Robodog
+--
+- searchRadius: double
+--
++ performRadiusSweep
+	(center: Point, radius: double)
+	: List&lt;SurvivorEntity&gt;
+--
+Responsibilities
+-- Deployable quadruped subunit for 
+localized perimeter scans.</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLClass</id><coordinates><x>450</x><y>144</y><w>174</w><h>114</h></coordinates><panel_attributes>&lt;&lt;entity&gt;&gt;
+model::ReconDrone
+--
+- flightAltitude: double
+--
++ executeScanPattern(bounds: Rectangle): void
++ returnToBase(): void
+--
+Responsibilities
+-- Aerial vehicle subclass for rapid 
+reconnaissance.</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLClass</id><coordinates><x>180</x><y>384</y><w>150</w><h>114</h></coordinates><panel_attributes>&lt;&lt;abstract&gt;&gt;
+model::Robot
+--
+# robotId: String
+# batteryLevel: double
+# currentPosition: Point
+--
++ moveTo(destination: Point): boolean
++ consumeBattery(amount: double): void
+/+ executeTask(): boolean/
+--
+Responsibilities
+-- Abstract base class for physical 
+	robotic hardware.</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>324</x><y>432</y><w>132</w><h>108</h></coordinates><panel_attributes>lt=&lt;&lt;-</panel_attributes><additional_attributes>10;10;200;160</additional_attributes></element><element><id>Relation</id><coordinates><x>324</x><y>366</y><w>138</w><h>84</h></coordinates><panel_attributes>lt=&lt;&lt;-</panel_attributes><additional_attributes>10;120;210;10</additional_attributes></element><element><id>Relation</id><coordinates><x>324</x><y>192</y><w>138</w><h>252</h></coordinates><panel_attributes>lt=&lt;&lt;-</panel_attributes><additional_attributes>10;400;210;10</additional_attributes></element><element><id>UMLClass</id><coordinates><x>438</x><y>636</y><w>198</w><h>114</h></coordinates><panel_attributes>&lt;&lt;entity&gt;&gt;
+model::RescueHelicopter
+--
+- maxLiftCapacity: int
+- rotorSpeed: double
+--
++ flyToLandingZone(lz: Point): boolean
++ extractTarget(survivor: SurvivorEntity): void
+--
+Responsibilities
+-- Heavy-lift extraction flight asset 
+	for recovering survivors.</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>324</x><y>432</y><w>126</w><h>270</h></coordinates><panel_attributes>lt=&lt;&lt;-</panel_attributes><additional_attributes>10;10;190;430</additional_attributes></element><element><id>Relation</id><coordinates><x>792</x><y>228</y><w>18</w><h>66</h></coordinates><panel_attributes>lt=&lt;&lt;.</panel_attributes><additional_attributes>10;10;10;90</additional_attributes></element><element><id>Relation</id><coordinates><x>792</x><y>552</y><w>18</w><h>72</h></coordinates><panel_attributes>lt=&lt;&lt;.</panel_attributes><additional_attributes>10;10;10;100</additional_attributes></element><element><id>Relation</id><coordinates><x>528</x><y>252</y><w>180</w><h>90</h></coordinates><panel_attributes>lt=&lt;-
+m1=1</panel_attributes><additional_attributes>10;10;280;130</additional_attributes></element><element><id>Relation</id><coordinates><x>534</x><y>420</y><w>24</w><h>72</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
+m2=1
+m1=1</panel_attributes><additional_attributes>10;10;10;100</additional_attributes></element></diagram>

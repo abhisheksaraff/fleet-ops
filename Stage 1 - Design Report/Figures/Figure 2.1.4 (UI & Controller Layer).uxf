@@ -1,0 +1,35 @@
+<diagram program="umletino" version="15.1"><zoom_level>10</zoom_level><element><id>UMLClass</id><coordinates><x>200</x><y>250</y><w>280</w><h>220</h></coordinates><panel_attributes>&lt;&lt;boundary&gt;&gt;
+ui::MissionPlannerGUI
+--
+- generatePlanButton: Button
+--
++ onGeneratePlanClicked(): void
++ displayProposedPlan(plan: TacticalPlan): void
+--
+Responsibilities
+-- User interface for reviewing incidents 
+	and triggering AI planning.</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLClass</id><coordinates><x>610</x><y>250</y><w>280</w><h>220</h></coordinates><panel_attributes>&lt;&lt;controller&gt;&gt;
+service::PlanOrchestrator
+--
+- geminiClient: GeminiClient
+--
++ generateTacticalPlan
+	(incidents: List&lt;MissionIncident&gt;): TacticalPlan
+--
+Responsibilities
+-- Orchestrates prompt construction 
+	and AI task decomposition.</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>470</x><y>330</y><w>160</w><h>40</h></coordinates><panel_attributes>lt=&lt;-
+triggers</panel_attributes><additional_attributes>140;20;10;20</additional_attributes></element><element><id>UMLClass</id><coordinates><x>420</x><y>570</y><w>280</w><h>220</h></coordinates><panel_attributes>&lt;&lt;boundary&gt;&gt;
+ui::PlanApprovalGUI
+--
+- approveButton: Button
+--
++ onCommitPlanClicked(): void
++ renderTaskQueue
+	(commands: List&lt;Command&gt;): void
+--
+Responsibilities
+-- Displays generated task lists for 
+	operator review and modification.</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>550</x><y>460</y><w>220</w><h>130</h></coordinates><panel_attributes>lt=&lt;-
+commits</panel_attributes><additional_attributes>200;10;10;110</additional_attributes></element><element><id>Relation</id><coordinates><x>320</x><y>460</y><w>230</w><h>130</h></coordinates><panel_attributes>lt=&lt;..
+&lt;&lt;creates&gt;&gt;</panel_attributes><additional_attributes>210;110;10;10</additional_attributes></element></diagram>
