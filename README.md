@@ -110,11 +110,151 @@ graph TD
 
 ------------------------------------------------------------------------
 
+## Standalone Agent (CLI)
+
+The agent also runs straight from a terminal, with no Maven at run time. Build the jar once:
+
+``` bash
+mvn -q package          # writes target/fleetops.jar
+```
+
+Then give the agent a file of incident reports:
+
+``` bash
+java -jar target/fleetops.jar agent --input tasks/flood.txt
+```
+
+For every report the agent verifies it with the AI, plans the response, asks for your approval, runs the
+simulation and prints the report and the AI-written debrief. Everything the AI does goes through the same
+checks as news found by `scan`, and the safety rules still have the last word before any unit moves.
+
+### Task file
+
+A task is an incident report in plain words. Separate tasks with a line of three dashes. Lines that start
+with `#` are ignored.
+
+```
+# tasks/batch.txt
+Flash flooding in Canmore, Alberta (51.0884, -115.3479). About 30 people are stranded
+on rooftops near Cougar Creek after the creek burst its banks.
+---
+A wildfire is moving toward a campground north of Kelowna, BC (49.9500, -119.5000).
+Around 15 campers are cut off on Westside Road.
+```
+
+Ready-made examples are in `tasks/`: `flood.txt` (one task), `batch.txt` (four tasks, one for each kind of
+incident) and `rejected.txt` (a report the agent should turn down). The coordinates in brackets are only
+needed for the offline `mock` AI; Gemini and Ollama work out the place from the text.
+
+### Options
+
+| Option | What it does |
+|---|---|
+| `-i`, `--input FILE` | The task file. Use `-` to read the tasks from standard input. Required |
+| `--llm gemini\|ollama\|mock` | Choose the AI on the command line. Default: `LLM_PROVIDER` from `.env` |
+| `-o`, `--output FILE` | Also write the results to this file as JSON |
+| `-y`, `--yes` | Approve every plan automatically. Required with `--input -`, because standard input is then used for the tasks |
+| `-n`, `--dry-run` | Verify and plan each task, then cancel the plan. Nothing is simulated |
+| `--progress` | Print finds and rescues while each mission runs |
+| `--no-debrief` | Skip the debrief |
+| `--depot-km`, `--seed`, `--max-ticks` | Where the fleet starts, the random seed, and the time limit, as for `run` |
+
+Standard fleet: 1 rover with 6 drones and 2 robodogs, and 2 helicopters.
+
+### Examples
+
+One task, offline, with the plan only (no key needed):
+
+``` bash
+java -jar target/fleetops.jar agent --input tasks/flood.txt --llm mock --dry-run
+```
+
+```
+Agent: 1 task(s), AI: mock
+
+Task 1 of 1: Flash flooding in Canmore, Alberta (51.0884, -115.3479). About 30 p...
+  VERIFIED: verified (Mock desk: the text gives a location and describes a live situation.)
+  Incident #31: Flash flooding in Canmore, Alberta (51.0884, -115.3479). (30 people)
+Plan for Flash flooding in Canmore, Alberta (51.0884, -115.3479). (flood, MODERATE) by mock
+  Why: Mock planner: MODERATE severity gets 2 drone(s); about 30 people get 2 helicopter(s); 1 robodog(s) search near the drop-off.
+  ROVER_1 drives 28.5 km to 51.0749, -115.3479, the south edge of the 3.0 km square
+  DRONE_1 sweeps 2 square(s) with lawnmower
+  DRONE_2 sweeps 2 square(s) with lawnmower
+  DOG_1 searches a circle of 0.40 km around 51.0785, -115.3479
+  2 helicopter(s) on standby for pick-ups
+Dry run: plan cancelled, nothing was simulated.
+
+1 task(s): 1 verified, 0 rejected, 0 mission(s) completed
+```
+
+The tasks from standard input, run to the end:
+
+``` bash
+cat tasks/flood.txt | java -jar target/fleetops.jar agent --input - --llm mock --yes
+```
+
+```
+Mission COMPLETED: Flash flooding in Canmore, Alberta (51.0884, -115.3479).
+  20 of 20 people rescued (107.1 minutes simulated, including the flight home, 6424 ticks)
+
+Debrief (written by mock)
+  All 20 people were rescued in 107 minutes.
+  Went well
+    - 20 people reached safety.
+  Next time
+    - The same fleet finished the job; try 1 drone instead of 2 to see if it still finishes in time.
+```
+
+A report the agent turns down:
+
+``` bash
+java -jar target/fleetops.jar agent --input tasks/rejected.txt --llm mock
+```
+
+```
+Task 1 of 1: Heavy rain is expected across Ontario this weekend.
+  REJECTED: not a real incident (Mock desk: no coordinates in the text, so the place cannot be located.)
+
+1 task(s): 0 verified, 1 rejected, 0 mission(s) completed
+```
+
+With the real AI and the results saved as JSON:
+
+``` bash
+java -jar target/fleetops.jar agent --input tasks/batch.txt --llm gemini --yes --output result.json
+```
+
+### Results file
+
+`--output` writes one entry per task. For a task that ran, it has the verdict, the incident, the plan, the
+mission result and the debrief (shortened here):
+
+```json
+{"llm":"mock","tasks":[{"task":1,"text":"Flash flooding in Canmore, Alberta ...","status":"VERIFIED",
+"reason":"...","incidentId":31,"type":"flood","title":"...","people":30,
+"plan":{"drones":2,"pattern":"lawnmower","helicopters":2,"robodogs":1,"plannedBy":"mock","rationale":"..."},
+"mission":{"status":"COMPLETED","people":20,"rescued":20,"foundNotRescued":0,"notFound":0,"minutes":107.1},
+"debrief":{"summary":"All 20 people were rescued in 107 minutes.","writtenBy":"mock"}}]}
+```
+
+`status` is `VERIFIED`, `REJECTED`, `DUPLICATE`, `FAILED` (the AI could not be reached) or `ERROR`.
+
+### Good to know
+
+- Each task becomes an incident in the local database. The same task is never stored twice: if it was only
+  planned (`--dry-run`) or not approved, running it again picks it up; if it already ran, the agent says so.
+  Run `reset -f` to clear finished incidents and run a task again.
+- A rejected task is a normal result, not an error.
+- Exit codes: 0 when every task was handled, 1 for a configuration error, 2 for bad usage (missing file, empty
+  file), 4 when the AI could not be reached for a task or a mission did not complete.
+
+------------------------------------------------------------------------
+
 ## Command Reference
 
 ### Command line
 
-Every command is run as `mvn -q exec:java -Dexec.mainClass=com.fleetops.cli.FleetOpsCli -Dexec.args="<command>"`.
+Every command is run as `mvn -q exec:java -Dexec.mainClass=com.fleetops.cli.FleetOpsCli -Dexec.args="<command>"`, or, after `mvn -q package`, as `java -jar target/fleetops.jar <command>`.
 
 | Command | What it does |
 |---|---|
@@ -124,6 +264,7 @@ Every command is run as `mvn -q exec:java -Dexec.mainClass=com.fleetops.cli.Flee
 | `show <id>` | Details of one incident |
 | `run <id> [--dry-run] [-y] [--progress] [--abort-after S] [--no-debrief]` | AI plans the response, you approve it, the simulation plays out and prints a report and a debrief |
 | `reset [-f] [-y]` | Delete stored incidents (`-f`: only finished ones), after confirmation |
+| `agent --input FILE [--llm NAME] [--yes] [--output FILE]` | Run the whole agent on incident reports from a file or standard input (see [Standalone Agent](#standalone-agent-cli)) |
 
 `run` also takes `--rovers`, `--drones`, `--robodogs`, `--helicopters`, `--depot-km`, `--seed` and
 `--max-ticks`; these set the size of the fleet (drones and robodogs are per rover).
@@ -233,6 +374,9 @@ CARTO_API_KEY=YOUR_FREE_CARTO_KEY_OR_LEAVE_BLANK
 mvn -q compile                             # build (downloads dependencies the first time)
 mvn -q exec:java                           # start the GUI
 mvn -q exec:java -Dexec.mainClass=com.fleetops.cli.FleetOpsCli -Dexec.args="config"   # CLI
+mvn -q package                             # build the standalone jar, target/fleetops.jar
+java -jar target/fleetops.jar config       # CLI from the jar
+java -jar target/fleetops.jar agent --input tasks/flood.txt   # agent on a task file
 ```
 
 ------------------------------------------------------------------------
@@ -273,6 +417,8 @@ Package overview (`src/main/java/com/fleetops/`):
 | `app`, `config` | Configuration and the composition root |
 | `cli`, `gui` | The two user interfaces |
 
+Other folders: `tasks/` holds sample task files for the `agent` command, and `docs/` holds the architecture notes.
+
 ------------------------------------------------------------------------
 
 ## Troubleshooting
@@ -295,9 +441,3 @@ Package overview (`src/main/java/com/fleetops/`):
 - The simulation is deliberately simple: straight-line flight and walking, no wind or terrain, one
   search pattern per mission. Robodogs always walk circles from drop-off points along the south edge
   of the square; the operator chooses how many, not where.
-
-------------------------------------------------------------------------
-
-# FleetOps
-
-Turning disaster headlines into planned, checked and debriefed rescue missions.
