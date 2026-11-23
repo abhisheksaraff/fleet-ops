@@ -156,6 +156,23 @@ public final class AppConfig {
         return raw == null || raw.isBlank() || raw.equals(PLACEHOLDER_CARTO_KEY) ? null : raw.strip();
     }
 
+    /**
+     * The same settings with another AI provider, for the command line's {@code --llm}. The model names
+     * from {@code .env} belong to the old provider, so they are dropped and the new provider's default is used.
+     *
+     * @throws ConfigException if Gemini is chosen but there is no API key
+     */
+    public AppConfig withLlmProvider(LlmProviderType provider) {
+        if (provider == llmProvider) {
+            return this;
+        }
+        if (provider == LlmProviderType.GEMINI && llmApiKey == null) {
+            throw new ConfigException("--llm gemini needs LLM_API_KEY. Copy .env.example to .env and put your key there.");
+        }
+        return new AppConfig(provider, llmApiKey, null, List.of(), llmBaseUrl, dbUrl, mapTiles, cartoApiKey, dbUser,
+                dbPassword, newsSources, telegramChannels, newsGoogleEdition, newsTopics);
+    }
+
     public LlmProviderType llmProvider() {
         return llmProvider;
     }

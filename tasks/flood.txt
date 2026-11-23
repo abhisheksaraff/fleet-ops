@@ -1,0 +1,4 @@
+# One task: an incident report in plain words.
+# Lines that start with # are ignored.
+Flash flooding in Canmore, Alberta (51.0884, -115.3479). About 30 people are stranded
+on rooftops near Cougar Creek after the creek burst its banks.

@@ -1,0 +1,12 @@
+# Four tasks, one per kind of incident. A line of three dashes separates tasks.
+Flash flooding in Canmore, Alberta (51.0884, -115.3479). About 30 people are stranded
+on rooftops near Cougar Creek after the creek burst its banks.
+---
+A wildfire is moving toward a campground north of Kelowna, BC (49.9500, -119.5000).
+Around 15 campers are cut off on Westside Road.
+---
+A magnitude 6.1 earthquake hit Ridgecrest, California (35.6225, -117.6709). Rescuers
+report about 20 people trapped in collapsed buildings downtown.
+---
+Food supplies have run out in a displacement camp outside Baidoa, Somalia (3.1167, 43.6500).
+Aid workers say 50 people need to be moved to a distribution point.

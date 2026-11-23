@@ -25,6 +25,11 @@ abstract class AbstractAppCommand implements Callable<Integer> {
         this.contextSupplier = contextSupplier;
     }
 
+    /** Builds the application context. A command may override this to change the configuration first. */
+    protected AppContext openContext() {
+        return contextSupplier.get();
+    }
+
     /** The command's work. Returns the exit code. */
     protected abstract int execute(AppContext app, PrintWriter out, PrintWriter err) throws Exception;
 
@@ -32,7 +37,7 @@ abstract class AbstractAppCommand implements Callable<Integer> {
     public final Integer call() {
         PrintWriter out = spec.commandLine().getOut();
         PrintWriter err = spec.commandLine().getErr();
-        try (AppContext app = contextSupplier.get()) {
+        try (AppContext app = openContext()) {
             int code = execute(app, out, err);
             out.flush();
             return code;

@@ -107,6 +107,14 @@ public final class IntelligenceService {
         return report;
     }
 
+    /**
+     * Processes one item that the caller already has, for example a report typed into a task file,
+     * exactly as a scanned item would be processed: the AI verifies it and a new incident is stored.
+     */
+    public synchronized IngestOutcome ingest(NewsItem item) {
+        return process(Objects.requireNonNull(item, "item"));
+    }
+
     private IngestOutcome process(NewsItem item) {
         Assessment assessment;
         try {
