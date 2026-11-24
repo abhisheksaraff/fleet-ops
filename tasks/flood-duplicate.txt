@@ -1,0 +1,3 @@
+# The same Canmore flood as flood.txt, written differently: the agent should recognise the same event.
+Residents of Canmore, Alberta (51.0900, -115.3500) are trapped by rising water along Cougar Creek.
+Rescuers estimate around 25 people need to be taken off their roofs.
