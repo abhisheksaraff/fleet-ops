@@ -61,7 +61,7 @@ final class MissionCard extends JPanel {
     private final JLabel progressMain = new JLabel();
     private final JLabel progressSub = new JLabel();
     private final JLabel progressUnits = new JLabel();
-    private final JButton planButton = new JButton("Plan rescue");
+    private final JButton planButton = new JButton("Plan mission");
     private final JButton abortButton = new JButton("Abort mission");
     private final JButton launchButton = new JButton("Launch");
     private final JButton cancelButton = new JButton("Cancel plan");

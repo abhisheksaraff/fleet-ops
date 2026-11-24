@@ -8,13 +8,11 @@ import com.fleetops.config.LlmProviderType;
 import com.fleetops.debrief.Debrief;
 import com.fleetops.domain.geo.GeoPoint;
 import com.fleetops.domain.incident.Incident;
-import com.fleetops.domain.incident.IncidentState;
-import com.fleetops.intel.IngestOutcome;
 import com.fleetops.mission.Mission;
 import com.fleetops.mission.MissionControl;
 import com.fleetops.mission.MissionReport;
+import com.fleetops.intel.TaskReports;
 import com.fleetops.mission.MissionStatus;
-import com.fleetops.news.NewsItem;
 import com.fleetops.plan.MissionPlan;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -26,7 +24,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.function.Supplier;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -112,12 +109,12 @@ final class AgentCommand extends AbstractAppCommand {
 
         String text;
         try {
-            text = fromStdin ? TaskFile.readAll(stdin) : Files.readString(Path.of(input), StandardCharsets.UTF_8);
+            text = fromStdin ? readAll(stdin) : Files.readString(Path.of(input), StandardCharsets.UTF_8);
         } catch (IOException e) {
             err.println("Cannot read the task file " + input + ": " + e.getMessage());
             return ExitCodes.USAGE;
         }
-        List<String> tasks = TaskFile.parse(text);
+        List<String> tasks = TaskReports.parse(text);
         if (tasks.isEmpty()) {
             err.println("The task file has no tasks. Write one incident report per task and separate tasks with a line of ---.");
             return ExitCodes.USAGE;
@@ -158,28 +155,15 @@ final class AgentCommand extends AbstractAppCommand {
         out.printf("Task %d of %d: %s%n", number, total, CliFormat.clip(task, 70));
 
         try {
-            NewsItem item = TaskFile.toNewsItem(task, app.clock().instant());
-            IngestOutcome outcome = app.intelligence().ingest(item);
-            Optional<Incident> chosen = outcome.incident();
-            String reason = outcome.reason();
-            if (outcome.status() == IngestOutcome.Status.DUPLICATE && chosen.isEmpty()) {
-                // The same task was stored by an earlier run (for example after --dry-run): use it again.
-                chosen = app.repository().findBySourceUrl(item.url()).filter(i -> i.state() == IncidentState.VERIFIED);
-                if (chosen.isPresent()) {
-                    reason = "this task is already stored and has not been run yet";
-                }
-            }
-            boolean usable = outcome.status() == IngestOutcome.Status.CREATED || (outcome.status() == IngestOutcome.Status.DUPLICATE && chosen.isPresent()
-                    && chosen.get().state() == IncidentState.VERIFIED);
-            String status = usable ? "VERIFIED" : outcome.status().name();
-            row.put("status", status);
-            row.put("reason", reason);
-            out.printf("  %s: %s%n", status, reason);
-            if (!usable) {
-                return outcome.status() == IngestOutcome.Status.FAILED;
+            TaskReports.Submission result = TaskReports.submit(app.intelligence(), app.repository(), task, app.clock().instant());
+            row.put("status", result.status().name());
+            row.put("reason", result.reason());
+            out.printf("  %s: %s%n", result.status(), result.reason());
+            if (!result.usable()) {
+                return result.status() == TaskReports.Submission.Status.FAILED;
             }
 
-            Incident incident = chosen.orElseThrow();
+            Incident incident = result.incident().orElseThrow();
             row.put("incidentId", incident.id().orElse(null));
             row.put("type", incident.type().keyword());
             row.put("title", incident.title());
@@ -265,6 +249,16 @@ final class AgentCommand extends AbstractAppCommand {
             row.put("debrief", debriefRow);
         }
         return report.status() != MissionStatus.COMPLETED;
+    }
+
+    /** Reads everything from a reader, for {@code --input -}. */
+    private static String readAll(BufferedReader reader) throws IOException {
+        StringBuilder text = new StringBuilder();
+        String line;
+        while ((line = reader.readLine()) != null) {
+            text.append(line).append('\n');
+        }
+        return text.toString();
     }
 
     private static String summary(List<Map<String, Object>> rows) {

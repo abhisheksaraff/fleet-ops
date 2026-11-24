@@ -289,6 +289,8 @@ run 2 --send-drones 3 --send-robodogs 1 --pattern spiral --dry-run
 
 `mvn -q exec:java` opens the map window (dark map tiles, so it needs internet access to show the map).
 
+**Report incident** (under *Scan news*) opens a window where you type or paste an incident report in plain words, or load a task file such as `tasks/flood.txt`. The AI verifies it like a news story, and a verified incident appears in the list ready to plan; a rejected report shows the reason.
+
 **Layout.** The header has presets (**Map**, **Map + list**, **Control**) and buttons to hide the sidebar and the console. Drag the dividers to resize either; the sizes are remembered.
 
 **Working with incidents.**

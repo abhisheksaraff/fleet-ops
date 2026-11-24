@@ -8,6 +8,7 @@ import com.fleetops.debrief.Debrief;
 import com.fleetops.domain.incident.Incident;
 import com.fleetops.domain.incident.IncidentState;
 import com.fleetops.intel.IngestReport;
+import com.fleetops.intel.TaskReports;
 import com.fleetops.mission.Mission;
 import com.fleetops.mission.MissionControl;
 import com.fleetops.mission.MissionReport;
@@ -26,6 +27,8 @@ import java.awt.Font;
 import java.awt.GridLayout;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -107,6 +110,7 @@ final class MainFrame extends JFrame {
 
     private final JButton scanButton = new JButton("Scan news");
     private final JButton clearButton = new JButton("Clear finished");
+    private final JButton reportButton = new JButton("Report incident");
     private final JButton runButton = new JButton("Plan mission");
     private final JButton abortButton = new JButton("Abort");
     private final JButton abortAllButton = new JButton("Abort all");
@@ -175,6 +179,7 @@ final class MainFrame extends JFrame {
     private void buildLayout() {
         Ui.primary(scanButton);
         Ui.secondary(clearButton);
+        Ui.secondary(reportButton);
         Ui.primary(runButton);
         Ui.danger(abortButton);
         Ui.danger(abortAllButton);
@@ -195,6 +200,11 @@ final class MainFrame extends JFrame {
         head.add(Ui.heading("Incidents"));
         head.add(javax.swing.Box.createVerticalStrut(8));
         head.add(actions);
+        head.add(javax.swing.Box.createVerticalStrut(8));
+        JPanel reportRow = new JPanel(new GridLayout(1, 1));
+        reportRow.setOpaque(false);
+        reportRow.add(reportButton);
+        head.add(reportRow);
         head.add(javax.swing.Box.createVerticalStrut(10));
         for (java.awt.Component c : head.getComponents()) {
             ((javax.swing.JComponent) c).setAlignmentX(0f);
@@ -302,6 +312,8 @@ final class MainFrame extends JFrame {
         });
         scanButton.addActionListener(e -> scan());
         clearButton.addActionListener(e -> clearFinished());
+        reportButton.setToolTipText("Type or load an incident report; the AI verifies it like a news story");
+        reportButton.addActionListener(e -> reportIncident());
         runButton.setToolTipText("Ask the AI for a plan for the selected incident");
         abortButton.setToolTipText("Stop the mission of the selected incident");
         abortAllButton.setToolTipText("Stop every running mission");
@@ -340,6 +352,7 @@ final class MainFrame extends JFrame {
         Incident selected = selectedIncident();
         boolean active = rig != null && !rig.control().activeMissions().isEmpty();
         scanButton.setEnabled(!busy);
+        reportButton.setEnabled(!busy);
         clearButton.setEnabled(!busy && !active && incidentList.all().stream().anyMatch(i -> !i.isActive()));
         runButton.setEnabled(!busy && pendingPlan == null && selected != null && selected.state() == IncidentState.VERIFIED);
         abortButton.setEnabled(!busy && selected != null && rig != null && rig.control().missionFor(selected).filter(m -> !m.isFinished()).isPresent());
@@ -426,6 +439,70 @@ final class MainFrame extends JFrame {
                 }
             }
         }.execute();
+    }
+
+    /** Lets the operator type or load incident reports and has the AI verify them like scanned news. */
+    private void reportIncident() {
+        Optional<String> typed = ReportDialog.ask(this, Path.of("tasks"));
+        if (typed.isEmpty()) {
+            return;
+        }
+        List<String> reports = TaskReports.parse(typed.get());
+        if (reports.isEmpty()) {
+            appendLog("Report: there is nothing to verify.");
+            return;
+        }
+        setBusy(true, "Verifying the report...");
+        new SwingWorker<List<TaskReports.Submission>, Void>() {
+            @Override
+            protected List<TaskReports.Submission> doInBackground() {
+                List<TaskReports.Submission> results = new ArrayList<>();
+                for (String report : reports) {
+                    results.add(TaskReports.submit(app.intelligence(), app.repository(), report, app.clock().instant()));
+                }
+                return results;
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    showReportResults(get());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (ExecutionException e) {
+                    showError("Report failed", e.getCause());
+                } finally {
+                    setBusy(false, " ");
+                }
+            }
+        }.execute();
+    }
+
+    private void showReportResults(List<TaskReports.Submission> results) {
+        Incident first = null;
+        List<String> notUsed = new ArrayList<>();
+        for (int i = 0; i < results.size(); i++) {
+            TaskReports.Submission result = results.get(i);
+            String label = results.size() == 1 ? "Report" : "Report " + (i + 1);
+            if (result.usable()) {
+                Incident incident = result.incident().orElseThrow();
+                appendLog(label + ": verified as incident #" + incident.id().map(String::valueOf).orElse("?") + ", " + incident.title());
+                if (first == null) {
+                    first = incident;
+                }
+            } else {
+                String line = label + ": " + result.status().name().toLowerCase(Locale.ROOT) + ", " + result.reason();
+                appendLog(line);
+                notUsed.add(line);
+            }
+        }
+        refreshIncidents();
+        if (first != null) {
+            incidentList.select(first);
+            map.fit(List.of(first));
+        } else {
+            JOptionPane.showMessageDialog(this, String.join("\n\n", notUsed), "Report not used", JOptionPane.INFORMATION_MESSAGE);
+        }
     }
 
     private void planSelected() {
