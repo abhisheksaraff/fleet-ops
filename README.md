@@ -9,14 +9,14 @@
 
 ------------------------------------------------------------------------
 
-<h2 align="center">▶&nbsp; <a href="https://drive.google.com/file/d/1iRp5Y8neUQ0y6-0ZX6T7qfNIH5a21sA6/view">Watch the demo video</a></h2>
+<h2 align="center">▶&nbsp; <a href="https://drive.google.com/file/d/1Rpomk-hjr8mrw6vgONCLtnaeAqwIx4-C/view">Watch the demo video</a></h2>
 <p align="center">Every feature, F01 to F10, N01 and N02, completed first in the CLI and then in the GUI.</p>
 
 ## For Reviewers
 
 | What | Where |
 |---|---|
-| Demo video | [Google Drive](https://drive.google.com/file/d/1iRp5Y8neUQ0y6-0ZX6T7qfNIH5a21sA6/view) |
+| Demo video | [Google Drive](https://drive.google.com/file/d/1Rpomk-hjr8mrw6vgONCLtnaeAqwIx4-C/view) |
 | Stage 2 report: feature mapping with screenshots, design patterns, changes, AI log, commit summary, demo index | [Stage_2_Report.pdf](<Stage 2 - Implementation Report/Stage_2_Report.pdf>) |
 | Stage 1 design report | [Stage_1_Report.pdf](<Stage 1 - Design Report/Stage_1_Report.pdf>) |
 | Architecture notes and the patterns in the code | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
@@ -31,19 +31,19 @@ java -jar target/fleetops.jar agent --input tasks/flood.txt --llm mock --yes --p
 mvn -q exec:java        # the GUI: Report incident, Load file, tasks/flood.txt, Verify, Plan mission, Launch
 ```
 
-**Where to see each feature.** CLI commands start with `java -jar target/fleetops.jar`; `<id>` comes from `incidents`.
+**Where to see each feature.** The video links open at the right moment. CLI commands start with `java -jar target/fleetops.jar`; `<id>` comes from `incidents`.
 
-| ID | Feature | CLI | GUI |
-|---|---|---|---|
-| F01 | Intelligence feed ingestion and parsing | `agent --input tasks/flood.txt` or `scan -v` | **Report incident** or **Scan news** |
-| F02 | Deduplication of incidents | `agent --input tasks/flood-duplicate.txt` | **Report incident** with the same file |
-| F03 | Autonomous task plan generation (AI) | `run <id> --dry-run` | **Plan mission** |
-| F04 | Plan approval and manual override | `run <id> --send-drones 3 --pattern spiral` | Plan window: change, **Back to original plan**, **Launch** |
-| F05 to F08 | Map and survivors, drones, robodogs, helicopters | `agent --input tasks/flood.txt --progress` | **Launch** and watch the map |
-| F09 | Deterministic safety gate | `run <id> --send-drones 7 --dry-run` | Plan window keeps every value inside the limits |
-| F10 | Post-mission debrief (AI) | End of a run, or `--output result.json` | Mission card |
-| N01 | Mission abort and recall | `run <id> --yes --abort-after 600` | **Abort** |
-| N02 | Task reports from a file, standard input or the GUI | `agent --input FILE`, `agent --input -` | **Report incident**, **Load file** |
+| ID | Feature | CLI | GUI | Video (CLI, GUI) |
+|---|---|---|---|---|
+| F01 | Intelligence feed ingestion and parsing | `agent --input tasks/flood.txt` or `scan -v` | **Report incident** or **Scan news** | [0:16](https://drive.google.com/file/d/1Rpomk-hjr8mrw6vgONCLtnaeAqwIx4-C/view?t=16), [0:39](https://drive.google.com/file/d/1Rpomk-hjr8mrw6vgONCLtnaeAqwIx4-C/view?t=39) |
+| F02 | Deduplication of incidents | `agent --input tasks/flood-duplicate.txt` | **Report incident** with the same file | [1:03](https://drive.google.com/file/d/1Rpomk-hjr8mrw6vgONCLtnaeAqwIx4-C/view?t=63), [1:28](https://drive.google.com/file/d/1Rpomk-hjr8mrw6vgONCLtnaeAqwIx4-C/view?t=88) |
+| F03 | Autonomous task plan generation (AI) | `run <id> --dry-run` | **Plan mission** | [2:09](https://drive.google.com/file/d/1Rpomk-hjr8mrw6vgONCLtnaeAqwIx4-C/view?t=129), [2:20](https://drive.google.com/file/d/1Rpomk-hjr8mrw6vgONCLtnaeAqwIx4-C/view?t=140) |
+| F04 | Plan approval and manual override | `run <id> --send-drones 3 --pattern spiral` | Plan window: change, **Back to original plan**, **Launch** | [2:42](https://drive.google.com/file/d/1Rpomk-hjr8mrw6vgONCLtnaeAqwIx4-C/view?t=162), [2:58](https://drive.google.com/file/d/1Rpomk-hjr8mrw6vgONCLtnaeAqwIx4-C/view?t=178) |
+| F05 to F08 | Map and survivors, drones, robodogs, helicopters | `agent --input tasks/flood.txt --progress` | **Launch** and watch the map | [3:26](https://drive.google.com/file/d/1Rpomk-hjr8mrw6vgONCLtnaeAqwIx4-C/view?t=206), [3:55](https://drive.google.com/file/d/1Rpomk-hjr8mrw6vgONCLtnaeAqwIx4-C/view?t=235) |
+| F09 | Deterministic safety gate | `run <id> --send-drones 7 --dry-run` | Plan window keeps every value inside the limits | [4:28](https://drive.google.com/file/d/1Rpomk-hjr8mrw6vgONCLtnaeAqwIx4-C/view?t=268), [5:13](https://drive.google.com/file/d/1Rpomk-hjr8mrw6vgONCLtnaeAqwIx4-C/view?t=313) |
+| F10 | Post-mission debrief (AI) | End of a run, or `--output result.json` | Mission card | [5:57](https://drive.google.com/file/d/1Rpomk-hjr8mrw6vgONCLtnaeAqwIx4-C/view?t=357), [6:05](https://drive.google.com/file/d/1Rpomk-hjr8mrw6vgONCLtnaeAqwIx4-C/view?t=365) |
+| N01 | Mission abort and recall | `run <id> --yes --abort-after 600` | **Abort** | [6:15](https://drive.google.com/file/d/1Rpomk-hjr8mrw6vgONCLtnaeAqwIx4-C/view?t=375), [6:24](https://drive.google.com/file/d/1Rpomk-hjr8mrw6vgONCLtnaeAqwIx4-C/view?t=384) |
+| N02 | Task reports from a file, standard input or the GUI | `agent --input FILE`, `agent --input -` | **Report incident**, **Load file** | [7:31](https://drive.google.com/file/d/1Rpomk-hjr8mrw6vgONCLtnaeAqwIx4-C/view?t=451), [0:39](https://drive.google.com/file/d/1Rpomk-hjr8mrw6vgONCLtnaeAqwIx4-C/view?t=39) |
 
 **AI use.** The code was written with Claude Code; Gemini 2.5 Flash runs inside the program. The tools, models, token use, cost and representative interactions are logged in Section 5 of the Stage 2 report. No API key is committed: keys live in a local `.env` that git ignores.
 
