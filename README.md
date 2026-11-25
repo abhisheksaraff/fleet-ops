@@ -9,6 +9,46 @@
 
 ------------------------------------------------------------------------
 
+<h2 align="center">▶&nbsp; <a href="https://drive.google.com/file/d/1iRp5Y8neUQ0y6-0ZX6T7qfNIH5a21sA6/view">Watch the demo video</a></h2>
+<p align="center">Every feature, F01 to F10, N01 and N02, completed first in the CLI and then in the GUI.</p>
+
+## For Reviewers
+
+| What | Where |
+|---|---|
+| Demo video | [Google Drive](https://drive.google.com/file/d/1iRp5Y8neUQ0y6-0ZX6T7qfNIH5a21sA6/view) |
+| Stage 2 report: feature mapping with screenshots, design patterns, changes, AI log, commit summary, demo index | [Stage_2_Report.pdf](<Stage 2 - Implementation Report/Stage_2_Report.pdf>) |
+| Stage 1 design report | [Stage_1_Report.pdf](<Stage 1 - Design Report/Stage_1_Report.pdf>) |
+| Architecture notes and the patterns in the code | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Sample tasks used in the video | [tasks/](tasks/) |
+
+**Try it in two minutes, with no key and no network** (the mock AI answers offline):
+
+``` bash
+cp .env.example .env
+mvn -q package
+java -jar target/fleetops.jar agent --input tasks/flood.txt --llm mock --yes --progress
+mvn -q exec:java        # the GUI: Report incident, Load file, tasks/flood.txt, Verify, Plan mission, Launch
+```
+
+**Where to see each feature.** CLI commands start with `java -jar target/fleetops.jar`; `<id>` comes from `incidents`.
+
+| ID | Feature | CLI | GUI |
+|---|---|---|---|
+| F01 | Intelligence feed ingestion and parsing | `agent --input tasks/flood.txt` or `scan -v` | **Report incident** or **Scan news** |
+| F02 | Deduplication of incidents | `agent --input tasks/flood-duplicate.txt` | **Report incident** with the same file |
+| F03 | Autonomous task plan generation (AI) | `run <id> --dry-run` | **Plan mission** |
+| F04 | Plan approval and manual override | `run <id> --send-drones 3 --pattern spiral` | Plan window: change, **Back to original plan**, **Launch** |
+| F05 to F08 | Map and survivors, drones, robodogs, helicopters | `agent --input tasks/flood.txt --progress` | **Launch** and watch the map |
+| F09 | Deterministic safety gate | `run <id> --send-drones 7 --dry-run` | Plan window keeps every value inside the limits |
+| F10 | Post-mission debrief (AI) | End of a run, or `--output result.json` | Mission card |
+| N01 | Mission abort and recall | `run <id> --yes --abort-after 600` | **Abort** |
+| N02 | Task reports from a file, standard input or the GUI | `agent --input FILE`, `agent --input -` | **Report incident**, **Load file** |
+
+**AI use.** The code was written with Claude Code; Gemini 2.5 Flash runs inside the program. The tools, models, token use, cost and representative interactions are logged in Section 5 of the Stage 2 report. No API key is committed: keys live in a local `.env` that git ignores.
+
+------------------------------------------------------------------------
+
 ## Overview
 
 FleetOps is a multi-agent rescue simulation. It reads disaster news, uses a **Large Language Model
@@ -19,9 +59,7 @@ It moves from raw news, to AI verification, to an AI-written mission plan, to **
 a simulated rescue, to an AI debrief. It is a playful simulation, not software for controlling real
 robots.
 
-![FleetOps demo](docs/demo.gif)
-
-<!-- Placeholder: record the map window and save it as docs/demo.gif. -->
+<!-- ![FleetOps demo](docs/demo.gif) -->
 
 The program works with no key and no network: the defaults use a mock AI and a built-in set of demo
 stories.
